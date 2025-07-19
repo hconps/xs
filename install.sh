@@ -143,11 +143,11 @@ echo -e "$green 配置完毕，以下是VLESS Reality服务器配置信息 $none
 echo -e "$yellow 地址 = ${cyan}${IPv4}${none}"
 echo -e "$yellow 端口 = ${cyan}${port}${none}"
 echo -e "$yellow UUID = ${cyan}${uuid}${none}"
-echo -e "$yellow 公钥 = ${cyan}${public_key}${none}"
+#echo -e "$yellow 公钥 = ${cyan}${public_key}${none}"
 echo -e "$yellow ShortId = ${cyan}${shortid}${none}"
 echo -e "$yellow SNI = ${cyan}${domain}${none}"
 echo -e "$yellow Fingerprint = ${cyan}${fingerprint}${none}"
 
 # 生成VLESS链接
-vless_reality_url="vless://${uuid}@${IPv4}:${port}?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&sni=${domain}&fp=${fingerprint}&pbk=${public_key}&sid=${shortid}&#VLESS_R_${IPv4}"
+vless_reality_url="vless://${uuid}@${IPv4}:${port}?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&sni=${domain}&fp=${fingerprint}&sid=${shortid}&#VLESS_R_${IPv4}"
 echo -e "${cyan}${vless_reality_url}${none}"
