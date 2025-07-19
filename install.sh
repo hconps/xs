@@ -124,6 +124,6 @@ service xray restart
 echo -e "$green ✅ 配置完成 VLESS Reality$none"
 ip=${IPv4}
 [[ "$ip" == *:* ]] && ip="[$ip]"
-vless_url="vless://${uuid}@${ip}:${port}?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&sni=${domain}&fp=${fingerprint}&pbk=${public_key}&sid=${shortid}&#VLESS_R_${ip}"
+vless_url="vless://${uuid}@${ip}:${port}?encryption=none&security=reality&type=tcp&sni=${domain}&fp=${fingerprint}&pbk=${public_key}&sid=${shortid}&flow=xtls-rprx-vision&#VLESS_R_${ip}"
 echo -e "$cyan$vless_url$none"
 echo "$vless_url" > ~/_vless_reality_url_
