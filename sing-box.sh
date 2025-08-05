@@ -96,7 +96,7 @@ if [[ $protocol == "reality" ]]; then
     "type": "vless",
     "listen": "::",
     "listen_port": $port,
-    "users": [{ "uuid": "$uuid" }],
+    "users": [{ "uuid": "$uuid","flow": "xtls-rprx-vision" }],
     "tls": {
       "enabled": true,
       "server_name": "$domain",
