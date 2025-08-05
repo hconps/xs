@@ -96,7 +96,7 @@ Description=Sing-box Service
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/sing-box run -c /usr/local/etc/sing-box/config.json
+ExecStart=/usr/local/bin/sing-box run
 Restart=on-failure
 LimitNOFILE=65535
 
