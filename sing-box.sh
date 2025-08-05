@@ -25,8 +25,7 @@ done
 apt update
 apt install -y curl unzip
 
-
-# ========= 下载并安装 sing-box =========
+# ========= 安装 sing-box（官方脚本） =========
 curl -fsSL https://sing-box.app/install.sh | sh
 
 # ========= 创建配置目录 =========
