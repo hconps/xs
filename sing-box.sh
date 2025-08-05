@@ -103,7 +103,7 @@ if [[ $protocol == "reality" ]]; then
       "reality": {
         "enabled": true,
         "private_key": "$privatekey",
-        "short_id": ["0123456789abcdef"],
+        "short_id": ["6ba85179e30d4fc2"],
         "handshake": { "server": "$domain", "server_port": 443 }
       }
     }
