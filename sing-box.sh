@@ -25,7 +25,6 @@ done
 apt update
 apt install -y curl unzip
 
-# ========= 检测架构 =========
 ARCH=$(uname -m)
 [[ "$ARCH" == "x86_64" ]] && ARCH="amd64"
 [[ "$ARCH" == "aarch64" ]] && ARCH="arm64"
@@ -35,6 +34,7 @@ VERSION=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest
 curl -L -O https://github.com/SagerNet/sing-box/releases/download/${VERSION}/sing-box-${VERSION}-linux-${ARCH}.zip
 unzip -o sing-box-${VERSION}-linux-${ARCH}.zip
 install -m 755 sing-box-${VERSION}-linux-${ARCH}/sing-box /usr/local/bin/
+
 
 # ========= 创建配置目录 =========
 mkdir -p /usr/local/etc/sing-box
