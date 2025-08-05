@@ -28,7 +28,7 @@ apt install -y curl unzip
 curl -fsSL https://sing-box.app/install.sh | sh
 
 # ========= 创建配置目录 =========
-mkdir -p /usr/local/etc/sing-box
+mkdir -p /etc/sing-box
 mkdir -p /var/log/sing-box
 
 # ========= 自动生成参数 =========
