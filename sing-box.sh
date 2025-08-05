@@ -41,18 +41,19 @@ mkdir -p /var/log/sing-box
 cat > /usr/local/etc/sing-box/config.json <<EOF
 {
   "log": {
-    "level": "info",
+    "level": "error",
     "output": "/var/log/sing-box/access.log"
   },
-  "inbounds": [
+  "inbounds":[
     {
       "type": "vless",
+      "tag": "shadowsocks xtls-reality",
       "listen": "::",
       "listen_port": $PORT,
       "users": [
         {
           "uuid": "$UUID",
-          "flow": "xtls-rprx-vision"
+          "flow": ""
         }
       ],
       "tls": {
@@ -68,8 +69,16 @@ cat > /usr/local/etc/sing-box/config.json <<EOF
           "short_id": [
             "$SHORT_ID"
           ]
-        },
-        "fingerprint": "$FINGERPRINT"
+        }
+      },
+      "multiplex": {
+        "enabled": true,
+        "padding": true,
+        "brutal": {
+          "enabled": false,
+          "up_mbps": 1000,
+          "down_mbps": 1000
+        }
       }
     }
   ],
@@ -79,6 +88,7 @@ cat > /usr/local/etc/sing-box/config.json <<EOF
   ]
 }
 EOF
+
 
 # ========= 配置 systemd 服务 =========
 cat > /etc/systemd/system/sing-box.service <<EOF
