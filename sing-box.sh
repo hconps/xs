@@ -15,7 +15,6 @@ while [[ $# -gt 0 ]]; do
     --privatekey) PRIVATE_KEY="$2"; shift 2 ;;
     --shortid) SHORT_ID="$2"; shift 2 ;;
     --domain) DOMAIN="$2"; shift 2 ;;
-    --fingerprint) FINGERPRINT="$2"; shift 2 ;;
     *) echo "未知参数: $1"; exit 1 ;;
   esac
 done
@@ -46,13 +45,13 @@ cat > /etc/sing-box/config.json <<EOF
   "inbounds":[
     {
       "type": "vless",
-      "tag": "shadowsocks xtls-reality",
+      "tag": "xtls-reality",
       "listen": "::",
       "listen_port": $PORT,
       "users": [
         {
           "uuid": "$UUID",
-          "flow": ""
+          "flow": "xtls-rprx-vision"
         }
       ],
       "tls": {
@@ -119,7 +118,6 @@ echo "Port:        $PORT"
 echo "PrivateKey:  $PRIVATE_KEY"
 echo "ShortID:     $SHORT_ID"
 echo "Domain:      $DOMAIN"
-echo "Fingerprint: $FINGERPRINT"
 echo "配置路径:    /etc/sing-box/config.json"
 echo "systemd服务: sing-box"
 echo
