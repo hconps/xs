@@ -1,123 +1,96 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# ========= 默认参数 =========
-UUID=""
-PORT=443
-PRIVATE_KEY=""
-SHORT_ID=""
-DOMAIN=""
+set -e
 
-# ========= 参数解析 =========
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --uuid) UUID="$2"; shift 2 ;;
-    --port) PORT="$2"; shift 2 ;;
-    --privatekey) PRIVATE_KEY="$2"; shift 2 ;;
-    --shortid) SHORT_ID="$2"; shift 2 ;;
-    --domain) DOMAIN="$2"; shift 2 ;;
-    *) echo "未知参数: $1"; exit 1 ;;
-  esac
-done
+# 参数校验
+UUID="$1"
+PORT="$2"
+PRIVATEKEY="$3"
+SHORTID="$4"
+DOMAIN="$5"
 
-# ========= 安装依赖 =========
-apt update
-apt install -y curl unzip
+if [[ -z $UUID || -z $PORT || -z $PRIVATEKEY || -z $SHORTID || -z $DOMAIN ]]; then
+  echo -e "用法: $0 <uuid> <port> <privatekey> <shortid> <domain>"
+  exit 1
+fi
 
-# ========= 安装 sing-box（官方脚本） =========
-curl -fsSL https://sing-box.app/install.sh | sh
+# 检查root权限
+[[ $EUID -ne 0 ]] && { echo "请使用 root 权限运行"; exit 1; }
 
-# ========= 创建配置目录 =========
+# 安装依赖
+apt-get update -y || yum update -y
+apt-get install -y wget tar || yum install -y wget tar
+
+# 下载最新版 sing-box
+ARCH=$(uname -m)
+[[ $ARCH == "x86_64" || $ARCH == "amd64" ]] && ARCH="amd64"
+[[ $ARCH == "aarch64" ]] && ARCH="arm64"
+
+VERSION=$(wget -qO- https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep tag_name | cut -d '"' -f4)
+URL="https://github.com/SagerNet/sing-box/releases/download/${VERSION}/sing-box-${VERSION:1}-linux-${ARCH}.tar.gz"
+
 mkdir -p /etc/sing-box
-mkdir -p /var/log/sing-box
+cd /etc/sing-box
+wget -qO sing-box.tar.gz "$URL"
+tar -xzf sing-box.tar.gz --strip-components=1
+rm -f sing-box.tar.gz
 
-# ========= 自动生成参数 =========
-[[ -z "$UUID" ]] && UUID=$(cat /proc/sys/kernel/random/uuid)
-[[ -z "$PRIVATE_KEY" ]] && PRIVATE_KEY=$(sing-box generate reality-keypair | grep PrivateKey | awk '{print $2}')
-[[ -z "$SHORT_ID" ]] && SHORT_ID=$(head -c 8 /dev/urandom | xxd -p)
-
-# ========= 写入配置文件 =========
+# 生成配置文件
 cat > /etc/sing-box/config.json <<EOF
 {
   "log": {
     "level": "error",
-    "output": "/var/log/sing-box/access.log"
+    "timestamp": true
   },
-  "inbounds":[
-    {
-      "type": "vless",
-      "tag": "xtls-reality",
-      "listen": "::",
-      "listen_port": $PORT,
-      "users": [
-        {
-          "uuid": "$UUID",
-          "flow": "xtls-rprx-vision"
-        }
-      ],
-      "tls": {
+  "inbounds": [{
+    "type": "vless",
+    "tag": "vless-in",
+    "listen": "::",
+    "listen_port": $PORT,
+    "users": [{
+      "uuid": "$UUID",
+      "flow": ""
+    }],
+    "tls": {
+      "enabled": true,
+      "server_name": "$DOMAIN",
+      "reality": {
         "enabled": true,
-        "server_name": "$DOMAIN",
-        "reality": {
-          "enabled": true,
-          "handshake": {
-            "server": "$DOMAIN",
-            "server_port": 443
-          },
-          "private_key": "$PRIVATE_KEY",
-          "short_id": [
-            "$SHORT_ID"
-          ]
-        }
-      },
-      "multiplex": {
-        "enabled": true,
-        "padding": true,
-        "brutal": {
-          "enabled": false,
-          "up_mbps": 1000,
-          "down_mbps": 1000
-        }
+        "handshake": {
+          "server": "$DOMAIN",
+          "server_port": 443
+        },
+        "private_key": "$PRIVATEKEY",
+        "short_id": ["$SHORTID"]
       }
     }
-  ],
-  "outbounds": [
-    { "type": "direct" },
-    { "type": "block", "tag": "block" }
-  ]
+  }],
+  "outbounds": [{
+    "type": "direct"
+  }]
 }
 EOF
 
-
-# ========= 配置 systemd 服务 =========
+# 写入 systemd 服务
 cat > /etc/systemd/system/sing-box.service <<EOF
 [Unit]
-Description=Sing-box Service
+Description=sing-box service
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/sing-box run
+ExecStart=/etc/sing-box/sing-box run -c /etc/sing-box/config.json
 Restart=on-failure
-LimitNOFILE=65535
+User=root
+LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# ========= 启动服务 =========
+# 启动服务
 systemctl daemon-reexec
 systemctl daemon-reload
 systemctl enable sing-box
 systemctl restart sing-box
 
-# ========= 输出信息 =========
-echo
-echo "✅ Sing-box 安装完成！以下是配置信息："
-echo "----------------------------------------"
-echo "UUID:        $UUID"
-echo "Port:        $PORT"
-echo "PrivateKey:  $PRIVATE_KEY"
-echo "ShortID:     $SHORT_ID"
-echo "Domain:      $DOMAIN"
-echo "配置路径:    /etc/sing-box/config.json"
-echo "systemd服务: sing-box"
-echo
+echo "✅ sing-box 安装完成，使用 VLESS + REALITY，端口 $PORT"
