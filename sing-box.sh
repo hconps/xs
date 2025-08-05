@@ -32,7 +32,7 @@ ARCH=$(uname -m)
 
 # ========= 下载并安装 sing-box =========
 VERSION=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep tag_name | cut -d '"' -f 4)
-curl -LO https://github.com/SagerNet/sing-box/releases/download/${VERSION}/sing-box-${VERSION}-linux-${ARCH}.zip
+curl -L -O https://github.com/SagerNet/sing-box/releases/download/${VERSION}/sing-box-${VERSION}-linux-${ARCH}.zip
 unzip -o sing-box-${VERSION}-linux-${ARCH}.zip
 install -m 755 sing-box-${VERSION}-linux-${ARCH}/sing-box /usr/local/bin/
 
