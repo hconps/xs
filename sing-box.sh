@@ -6,7 +6,6 @@ PORT=443
 PRIVATE_KEY=""
 SHORT_ID=""
 DOMAIN=""
-FINGERPRINT="random"
 
 # ========= 参数解析 =========
 while [[ $# -gt 0 ]]; do
@@ -38,7 +37,7 @@ mkdir -p /var/log/sing-box
 [[ -z "$SHORT_ID" ]] && SHORT_ID=$(head -c 8 /dev/urandom | xxd -p)
 
 # ========= 写入配置文件 =========
-cat > /usr/local/etc/sing-box/config.json <<EOF
+cat > /etc/sing-box/config.json <<EOF
 {
   "log": {
     "level": "error",
@@ -121,6 +120,6 @@ echo "PrivateKey:  $PRIVATE_KEY"
 echo "ShortID:     $SHORT_ID"
 echo "Domain:      $DOMAIN"
 echo "Fingerprint: $FINGERPRINT"
-echo "配置路径:    /usr/local/etc/sing-box/config.json"
+echo "配置路径:    /etc/sing-box/config.json"
 echo "systemd服务: sing-box"
 echo
