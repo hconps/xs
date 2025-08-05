@@ -31,10 +31,9 @@ ARCH=$(uname -m)
 
 # ========= 下载并安装 sing-box =========
 VERSION=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep tag_name | cut -d '"' -f 4)
-curl -L -O https://github.com/SagerNet/sing-box/releases/download/${VERSION}/sing-box-${VERSION}-linux-${ARCH}.zip
-unzip -o sing-box-${VERSION}-linux-${ARCH}.zip
-install -m 755 sing-box-${VERSION}-linux-${ARCH}/sing-box /usr/local/bin/
-
+curl -L -O https://github.com/SagerNet/sing-box/releases/download/${VERSION}/sing-box-${VERSION_NUMBER}-linux-${ARCH}.zip
+unzip -o sing-box-${VERSION_NUMBER}-linux-${ARCH}.zip
+install -m 755 sing-box-${VERSION_NUMBER}-linux-${ARCH}/sing-box /usr/local/bin/
 
 # ========= 创建配置目录 =========
 mkdir -p /usr/local/etc/sing-box
