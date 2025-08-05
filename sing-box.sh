@@ -27,32 +27,7 @@ apt install -y curl unzip
 
 
 # ========= 下载并安装 sing-box =========
-# 自动判断架构
-ARCH=$(uname -m)
-case "$ARCH" in
-  x86_64) ARCH="amd64" ;;
-  aarch64) ARCH="arm64" ;;
-  *) echo "❌ 不支持的架构: $ARCH" && exit 1 ;;
-esac
-
-# 获取最新版版本号（去除v前缀）
-VERSION=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest | grep tag_name | cut -d '"' -f 4)
-VERSION_NUM=${VERSION#v}
-
-# 可选 GitHub Proxy，示例：GH_PROXY=ghproxy.com/
-GH_PROXY="${GH_PROXY:-}"
-
-# 下载并解压 .tar.gz 安装包
-TEMP_DIR="/tmp/sing-box-install"
-mkdir -p "$TEMP_DIR"
-
-wget --no-check-certificate --continue \
-  "https://${GH_PROXY}github.com/SagerNet/sing-box/releases/download/${VERSION}/sing-box-${VERSION_NUM}-linux-${ARCH}.tar.gz" \
-  -qO- | tar -xz -C "$TEMP_DIR" "sing-box-${VERSION_NUM}-linux-${ARCH}/sing-box"
-
-# 安装到 /usr/local/bin
-install -m 755 "$TEMP_DIR/sing-box-${VERSION_NUM}-linux-${ARCH}/sing-box" /usr/local/bin/sing-box
-
+curl -fsSL https://sing-box.app/install.sh | sh
 
 # ========= 创建配置目录 =========
 mkdir -p /usr/local/etc/sing-box
