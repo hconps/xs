@@ -66,11 +66,19 @@ fi
 
 
 # 开启 BBR
-sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
-sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
-echo "net.core.default_qdisc = fq" >> /etc/sysctl.conf
-echo "net.ipv4.tcp_congestion_control = bbr" >> /etc/sysctl.conf
-sysctl -p >/dev/null 2>&1
+#sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
+#sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
+#echo "net.core.default_qdisc = fq" >> /etc/sysctl.conf
+#echo "net.ipv4.tcp_congestion_control = bbr" >> /etc/sysctl.conf
+#sysctl -p >/dev/null 2>&1
+
+# 开启 BBR(for debian13)
+modprobe tcp_bbr
+cat >/etc/sysctl.d/99-bbr.conf <<EOF
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+EOF
+sysctl --system >/dev/null 2>&1
 
 # 安装 xray
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u root
