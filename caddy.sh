@@ -1,16 +1,16 @@
 #!/bin/bash
 # 一键部署 Caddy + Cloudflare 反代
-# 适用：Debian/Ubuntu 系统
+# 适用系统：Debian/Ubuntu
 
 set -e
 
-# 颜色
+# 颜色输出
 green='\e[92m'; red='\e[31m'; none='\e[0m'
 ok() { echo -e "${green}[OK]${none} $1"; }
 err() { echo -e "${red}[ERR]${none} $1" && exit 1; }
 
 # 检查 root
-[[ $EUID -ne 0 ]] && err "请使用 root 运行此脚本"
+[[ $EUID -ne 0 ]] && err "请使用 root 用户运行此脚本"
 
 # 输入信息
 read -p "请输入你的域名（如 mydomain.com）: " DOMAIN
@@ -22,11 +22,22 @@ read -p "请输入 Cloudflare API Token: " CF_TOKEN
 # 安装依赖
 ok "安装依赖..."
 apt update -y
-apt install -y curl debian-keyring debian-archive-keyring apt-transport-https
+apt install -y curl wget tar debian-keyring debian-archive-keyring apt-transport-https
+
+# 安装 Go
+ok "安装 Go..."
+GO_VERSION="1.22.4"
+wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
+rm -rf /usr/local/go
+tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
+export PATH=$PATH:/usr/local/go/bin
+echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
 
 # 安装 xcaddy
 ok "安装 xcaddy..."
-apt install -y xcaddy
+go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+export PATH=$PATH:$(go env GOPATH)/bin
+echo "export PATH=\$PATH:$(go env GOPATH)/bin" >> /etc/profile
 
 # 构建带 Cloudflare 插件的 Caddy
 ok "构建带 Cloudflare 插件的 Caddy..."
@@ -39,11 +50,11 @@ id -u caddy &>/dev/null || useradd --system --home /var/lib/caddy --shell /usr/s
 mkdir -p /etc/caddy /var/lib/caddy
 chown -R caddy:caddy /etc/caddy /var/lib/caddy
 
-# 配置环境变量（Cloudflare Token）
+# 配置 Cloudflare API Token
 echo "CLOUDFLARE_API_TOKEN=${CF_TOKEN}" > /etc/caddy/env
 chmod 600 /etc/caddy/env
 
-# 创建 Caddyfile
+# 写入 Caddyfile
 cat >/etc/caddy/Caddyfile <<EOF
 {
     email admin@${DOMAIN}
@@ -62,7 +73,7 @@ EOF
 # 创建 systemd 服务
 cat >/etc/systemd/system/caddy.service <<EOF
 [Unit]
-Description=Caddy web server
+Description=Caddy Web Server
 After=network.target
 
 [Service]
@@ -85,5 +96,5 @@ systemctl enable caddy
 systemctl restart caddy
 
 ok "Caddy 部署完成！"
-echo -e "${green}请确保你的域名 ${DOMAIN} 已正确解析到本机 IP，并在 Cloudflare 启用 Full SSL。${none}"
+echo -e "${green}请确保你的域名 ${DOMAIN} 已正确解析到本机 IP，并在 Cloudflare 启用 Full SSL 模式。${none}"
 echo -e "${green}现在可以通过 https://${DOMAIN} 访问你的服务（反代 127.0.0.1:${PORT}）。${none}"
