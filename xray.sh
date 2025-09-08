@@ -49,12 +49,14 @@ if [[ -z $uuid ]]; then
 fi
 
 # 私钥和公钥处理
-if [[ -z "$private_key" ]]; then
-    # 没传参 → 生成一对新的
-    tmp_key=$(xray x25519)
+if [[ -n "$private_key" ]]; then
+    # 用户传了私钥 → 使用并推导公钥
+    public_key=$(echo "$private_key" | /usr/local/bin/xray x25519 -i | grep -oP '(?<=Public key: ).*')
 else
-    # 传了私钥 → 根据它生成公钥
-    tmp_key=$(echo "$private_key" | xray x25519 -i)
+    # 用户没传 → 自动生成
+    tmp_key=$(/usr/local/bin/xray x25519)
+    private_key=$(echo "$tmp_key" | grep -oP '(?<=Private key: ).*')
+    public_key=$(echo "$tmp_key" | grep -oP '(?<=Public key: ).*')
 fi
 
 private_key=$(echo "$tmp_key" | grep 'Private key' | awk '{print $3}')
