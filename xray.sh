@@ -44,14 +44,23 @@ done
 # UUID 自动生成
 if [[ -z $uuid ]]; then
     uuidSeed="${IPv4}${IPv6}$(cat /proc/sys/kernel/hostname)$(cat /etc/timezone)"
-    uuid=$(curl -sL https://www.uuidtools.com/api/generate/v3/namespace/ns:dns/name/${uuidSeed} | grep -oP '[^-]{8}-[^-]{4}-[^-]{4}-[^-]{4}-[^-]{12}')
+    uuid=$(curl -sL "https://www.uuidtools.com/api/generate/v3/namespace/ns:dns/name/${uuidSeed}" \
+        | grep -oP '[^-]{8}-[^-]{4}-[^-]{4}-[^-]{4}-[^-]{12}')
 fi
 
-# 私钥和 ShortID 自动生成
+# 私钥和公钥处理
 if [[ -z "$private_key" ]]; then
-    private_key=$(echo -n ${uuid} | md5sum | head -c 32 | base64 -w 0 | tr '+/' '-_' | tr -d '=')
+    # 没传参 → 生成一对新的
+    tmp_key=$(xray x25519)
+else
+    # 传了私钥 → 根据它生成公钥
+    tmp_key=$(echo "$private_key" | xray x25519 -i)
 fi
 
+private_key=$(echo "$tmp_key" | grep 'Private key' | awk '{print $3}')
+public_key=$(echo "$tmp_key" | grep 'Public key' | awk '{print $3}')
+
+# ShortID 自动生成
 if [[ -z "$shortid" ]]; then
     shortid=$(echo -n ${uuid} | sha1sum | head -c 16)
 fi
@@ -64,15 +73,7 @@ if [[ -z "$IPv4" && -n "$IPv6" ]]; then
     IPv4=$(curl -4s https://www.cloudflare.com/cdn-cgi/trace | grep -oP "ip=\K.*$")
 fi
 
-
-# 开启 BBR
-#sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
-#sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
-#echo "net.core.default_qdisc = fq" >> /etc/sysctl.conf
-#echo "net.ipv4.tcp_congestion_control = bbr" >> /etc/sysctl.conf
-#sysctl -p >/dev/null 2>&1
-
-# 开启 BBR(for debian13)
+# 开启 BBR (for debian13)
 modprobe tcp_bbr
 cat >/etc/sysctl.d/99-bbr.conf <<EOF
 net.core.default_qdisc = fq
@@ -83,11 +84,6 @@ sysctl --system >/dev/null 2>&1
 # 安装 xray
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u root
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install-geodata
-
-# 生成公钥
-tmp_key=$(echo -n ${private_key} | xargs xray x25519 -i)
-private_key=$(echo ${tmp_key} | awk '{print $3}')
-public_key=$(echo ${tmp_key} | awk '{print $6}')
 
 # 写入 xray 配置
 cat > /usr/local/etc/xray/config.json <<EOF
@@ -135,4 +131,3 @@ ip=${IPv4}
 vless_url="vless://${uuid}@${ip}:${port}?encryption=none&security=reality&type=tcp&sni=${domain}&fp=${fingerprint}&pbk=${public_key}&sid=${shortid}&flow=xtls-rprx-vision&#VLESS_R_${ip}"
 echo -e "$cyan$vless_url$none"
 echo "$vless_url" > ~/_vless_reality_url_
-
