@@ -59,9 +59,6 @@ else
     public_key=$(echo "$tmp_key" | grep -oP '(?<=Public key: ).*')
 fi
 
-private_key=$(echo "$tmp_key" | grep 'Private key' | awk '{print $3}')
-public_key=$(echo "$tmp_key" | grep 'Public key' | awk '{print $3}')
-
 # ShortID 自动生成
 if [[ -z "$shortid" ]]; then
     shortid=$(echo -n ${uuid} | sha1sum | head -c 16)
@@ -85,7 +82,6 @@ sysctl --system >/dev/null 2>&1
 
 # 安装 xray
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u root
-bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install-geodata
 
 # 写入 xray 配置
 cat > /usr/local/etc/xray/config.json <<EOF
