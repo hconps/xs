@@ -51,7 +51,7 @@ fi
 # 私钥和公钥处理
 if [[ -n "$private_key" ]]; then
     # 用户传了私钥 → 使用并推导公钥
-    public_key=$(echo "$private_key" | /usr/local/bin/xray x25519 -i | grep -oP '(?<=Public key: ).*')
+    public_key=$(/usr/local/bin/xray x25519 -i <<< "$private_key" | grep -oP '(?<=Public key: ).*')
 else
     # 用户没传 → 自动生成
     tmp_key=$(/usr/local/bin/xray x25519)
