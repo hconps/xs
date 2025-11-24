@@ -74,9 +74,14 @@ sysctl --system >/dev/null 2>&1
 # 安装 xray
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u root
 
-# 私钥和公钥处理
 if [[ -n "$private_key" ]]; then
-    public_key=$(printf "%s" "$private_key" | /usr/local/bin/xray x25519 -i | grep -oP '(?<=Public key: ).*')
+    # 用户传了私钥 → 使用并推导公钥
+    # 这里需要确保 xray 安装成功且在路径中
+    if [ -f "/usr/local/bin/xray" ]; then
+        public_key=$(/usr/local/bin/xray x25519 -i <<< "$private_key" | grep -oP '(?<=Public key: ).*')
+    else
+        echo "错误：Xray 安装失败，无法生成公钥" && exit 1
+    fi
 else
     # 用户没传 → 自动生成
     tmp_key=$(/usr/local/bin/xray x25519)
