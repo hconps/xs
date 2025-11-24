@@ -118,6 +118,8 @@ ${final_url}"
 # sort -t'#' -k 2 : 指定 # 为分隔符，根据第 2 列（即备注）进行排序
 sorted_content=$(echo -e "$combined_content" | grep "vless://" | sort -t'#' -k 2)
 
+# ... (前面的代码不变)
+
 # 7. 上传回 Cloudflare
 echo -e "${yellow}正在上传更新后的列表...${none}"
 
@@ -126,12 +128,17 @@ response=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/${accou
      -H "Content-Type: text/plain" \
      --data "$sorted_content")
 
-if [[ "$response" == *"\"success\":true"* ]]; then
+# === 修改点开始 ===
+# 使用正则匹配，允许冒号后面有空格
+if [[ "$response" =~ \"success\":[[:space:]]*true ]]; then
     echo -e "${green}✅ 成功！节点已添加并重新排序。${none}"
     echo -e "列表 Key: $list_key"
-    echo -e "当前节点数: $(echo "$sorted_content" | wc -l)"
+    # 统计行数时排除空行
+    count=$(echo "$sorted_content" | grep -v '^\s*$' | wc -l)
+    echo -e "当前节点数: $count"
 else
     echo -e "${red}❌ 上传失败！${none}"
     echo "API 返回: $response"
     exit 1
 fi
+# === 修改点结束 ===
