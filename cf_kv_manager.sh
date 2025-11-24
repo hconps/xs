@@ -16,8 +16,8 @@ ${yellow}使用方法:${none}
 ${yellow}必要参数:${none}
   --account    Cloudflare Account ID
   --token      Cloudflare API Token (需有 KV Write 权限)
-  --kv         KV Namespace ID
-  --list-key   KV 中存储订阅列表的键名 (例如: my_subscribe_list)
+  --kv         KV Namespace ID (不是名称)
+  --list-key   KV 存储列表的文件名 (例如: LINK.txt)
 
 ${yellow}可选参数:${none}
   --file       指定 VLESS 节点文件 (默认: ~/_vless_reality_url_)
@@ -70,11 +70,11 @@ if [[ -z "$raw_url" ]]; then
     exit 1
 fi
 
-# 3. 获取并修改备注
-# 如果没有通过命令行传入别名，则请求用户输入
+# 3. 获取并处理备注 (核心修改部分)
 if [[ -z "$node_alias" ]]; then
     echo -e "${cyan}当前节点: $raw_url${none}"
-    read -p "请输入该节点的备注名 (将作为 #后的内容): " node_alias
+    echo -e "输入提示: 数字后加 o=€, y=¥, p=£, d=$ (例: 34o -> €34)"
+    read -p "请输入节点备注: " node_alias
 fi
 
 if [[ -z "$node_alias" ]]; then
@@ -82,25 +82,37 @@ if [[ -z "$node_alias" ]]; then
     exit 1
 fi
 
-# 替换 # 后面的内容
-# ${raw_url%#*} 删除最后一个 # 及其右边的内容
+# === 货币符号自动替换逻辑 ===
+# sed -E 's/([0-9.]+)[字母]/符号\1/g'
+# \1 代表正则里第一个括号匹配到的数字
+
+# o -> Euro (€)
+node_alias=$(echo "$node_alias" | sed -E 's/([0-9.]+)o/€\1/g')
+# y -> Yuan/Yen (¥)
+node_alias=$(echo "$node_alias" | sed -E 's/([0-9.]+)y/¥\1/g')
+# p -> Pound (£)
+node_alias=$(echo "$node_alias" | sed -E 's/([0-9.]+)p/£\1/g')
+# d -> Dollar ($) (顺手加上，方便统一)
+node_alias=$(echo "$node_alias" | sed -E 's/([0-9.]+)d/$\1/g')
+
+echo -e "${cyan}转换后备注: $node_alias${none}"
+# ===========================
+
+# 替换 URL 中 # 后面的内容
 final_url="${raw_url%#*}#${node_alias}"
-echo -e "${green}预处理 URL: $final_url${none}"
 
 # 4. 获取 Cloudflare KV 当前列表
 echo -e "${yellow}正在获取远程 KV 列表...${none}"
 remote_content=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts/${account_id}/storage/kv/namespaces/${kv_id}/values/${list_key}" \
      -H "Authorization: Bearer ${api_token}")
 
-# 检查是否获取成功 (如果 key 不存在，CF 会返回错误代码，curl 获取到的可能不是纯文本)
-# 这里做一个简单的判断：如果返回内容包含 "errors":，说明可能出错了或者是第一次创建
 if [[ "$remote_content" == *"\"errors\":["* ]]; then
-    echo -e "${yellow}远程列表不存在，将初始化为新列表。${none}"
+    echo -e "${yellow}远程列表为空或新建，初始化中...${none}"
     remote_content=""
 fi
 
 # 5. 对比查重
-# 检查备注名是否已存在于远程列表中
+# 注意：这里查重用的是转换后的符号，所以只要 KV 里有了 €34，你再输 34o 也会被拦截，很完美
 if echo "$remote_content" | grep -q "#${node_alias}$"; then
     echo -e "${red}❌ 错误：列表中已存在备注为 [#${node_alias}] 的节点！${none}"
     echo "跳过上传操作。"
@@ -109,31 +121,24 @@ fi
 
 # 6. 合并与排序
 echo -e "${yellow}正在合并并排序...${none}"
-# 将旧内容和新内容合并，去除空行
 combined_content="${remote_content}
 ${final_url}"
 
-# 核心排序逻辑：
-# grep "vless://" 确保只处理有效行
-# sort -t'#' -k 2 : 指定 # 为分隔符，根据第 2 列（即备注）进行排序
+# 过滤空行并排序
 sorted_content=$(echo -e "$combined_content" | grep "vless://" | sort -t'#' -k 2)
 
-# ... (前面的代码不变)
-
 # 7. 上传回 Cloudflare
-echo -e "${yellow}正在上传更新后的列表...${none}"
+echo -e "${yellow}正在上传...${none}"
 
 response=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/${account_id}/storage/kv/namespaces/${kv_id}/values/${list_key}" \
      -H "Authorization: Bearer ${api_token}" \
      -H "Content-Type: text/plain" \
      --data "$sorted_content")
 
-# === 修改点开始 ===
-# 使用正则匹配，允许冒号后面有空格
+# 使用正则匹配 success，兼容空格
 if [[ "$response" =~ \"success\":[[:space:]]*true ]]; then
     echo -e "${green}✅ 成功！节点已添加并重新排序。${none}"
     echo -e "列表 Key: $list_key"
-    # 统计行数时排除空行
     count=$(echo "$sorted_content" | grep -v '^\s*$' | wc -l)
     echo -e "当前节点数: $count"
 else
@@ -141,4 +146,3 @@ else
     echo "API 返回: $response"
     exit 1
 fi
-# === 修改点结束 ===
