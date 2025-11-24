@@ -71,22 +71,28 @@ net.ipv4.tcp_congestion_control = bbr
 EOF
 sysctl --system >/dev/null 2>&1
 
-# 安装 xray
+# ==========================================
+# 1. 先安装 Xray
+# ==========================================
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u root
 
+# ==========================================
+# 2. 处理私钥和公钥 (已修正：匹配 Password 字段)
+# ==========================================
 if [[ -n "$private_key" ]]; then
-    # 用户传了私钥 → 使用并推导公钥
-    # 这里需要确保 xray 安装成功且在路径中
+    # 用户传了私钥 → 使用 -i 传参
     if [ -f "/usr/local/bin/xray" ]; then
-        public_key=$(/usr/local/bin/xray x25519 -i <<< "$private_key" | grep -oP '(?<=Public key: ).*')
+        # 这里只提取 "Password: " 后面的内容
+        public_key=$(/usr/local/bin/xray x25519 -i "$private_key" | grep -oP '(?<=Password: ).*')
     else
-        echo "错误：Xray 安装失败，无法生成公钥" && exit 1
+        echo "错误：Xray 安装失败" && exit 1
     fi
 else
     # 用户没传 → 自动生成
     tmp_key=$(/usr/local/bin/xray x25519)
-    private_key=$(echo "$tmp_key" | grep -oP '(?<=Private key: ).*')
-    public_key=$(echo "$tmp_key" | grep -oP '(?<=Public key: ).*')
+    # 兼容你的版本，同时尝试匹配 PrivateKey 和 Password
+    private_key=$(echo "$tmp_key" | grep -oP '(?<=Private key: |PrivateKey: ).*')
+    public_key=$(echo "$tmp_key" | grep -oP '(?<=Public key: |Password: ).*')
 fi
 
 
