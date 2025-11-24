@@ -48,16 +48,7 @@ if [[ -z $uuid ]]; then
         | grep -oP '[^-]{8}-[^-]{4}-[^-]{4}-[^-]{4}-[^-]{12}')
 fi
 
-# 私钥和公钥处理
-if [[ -n "$private_key" ]]; then
-    # 用户传了私钥 → 使用并推导公钥
-    public_key=$(/usr/local/bin/xray x25519 -i <<< "$private_key" | grep -oP '(?<=Public key: ).*')
-else
-    # 用户没传 → 自动生成
-    tmp_key=$(/usr/local/bin/xray x25519)
-    private_key=$(echo "$tmp_key" | grep -oP '(?<=Private key: ).*')
-    public_key=$(echo "$tmp_key" | grep -oP '(?<=Public key: ).*')
-fi
+
 
 # ShortID 自动生成
 if [[ -z "$shortid" ]]; then
@@ -82,6 +73,18 @@ sysctl --system >/dev/null 2>&1
 
 # 安装 xray
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u root
+
+# 私钥和公钥处理
+if [[ -n "$private_key" ]]; then
+    # 用户传了私钥 → 使用并推导公钥
+    public_key=$(/usr/local/bin/xray x25519 -i <<< "$private_key" | grep -oP '(?<=Public key: ).*')
+else
+    # 用户没传 → 自动生成
+    tmp_key=$(/usr/local/bin/xray x25519)
+    private_key=$(echo "$tmp_key" | grep -oP '(?<=Private key: ).*')
+    public_key=$(echo "$tmp_key" | grep -oP '(?<=Public key: ).*')
+fi
+
 
 # 写入 xray 配置
 cat > /usr/local/etc/xray/config.json <<EOF
