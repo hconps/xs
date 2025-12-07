@@ -2,8 +2,7 @@
 
 # ==============================================================
 # 功能：Docker Compose 部署 Xray VLESS-Reality (Host模式)
-# 特性：支持参数化运行、自动生成/推导密钥、输出分享链接
-# 修正：修复官方镜像 Entrypoint 导致的 "xray xray" 命令重复错误
+# 特性：支持参数化运行、强制去除回车符、更强的容错性
 # ==============================================================
 
 # --- 1. 定义默认变量 ---
@@ -57,12 +56,10 @@ if ! command -v docker &> /dev/null; then
     curl -fsSL https://get.docker.com | bash
     systemctl enable docker
     systemctl start docker
-else
-    echo "Docker 已安装。"
 fi
 
 if ! command -v docker &> /dev/null; then
-    echo -e "\033[31mDocker 安装失败或未启动，请手动检查环境。\033[0m"
+    echo -e "\033[31mDocker 安装失败，请手动检查环境。\033[0m"
     exit 1
 fi
 
@@ -70,42 +67,56 @@ mkdir -p "$WORK_DIR"
 echo -e "\033[36m>>> 拉取 Xray 官方镜像...\033[0m"
 docker pull "$IMAGE_NAME"
 
-# --- 4. 密钥与 UUID 处理逻辑 (已修复命令) ---
+# --- 4. 密钥与 UUID 处理逻辑 (修复版) ---
+
+# 4.1 UUID
 if [ -z "$CUSTOM_UUID" ]; then
-    # 修正：直接运行 uuid，不需要加 xray 前缀
-    UUID=$(docker run --rm "$IMAGE_NAME" uuid)
+    # 增加 tr -d '\r' 去除可能存在的 Windows 回车符
+    UUID=$(docker run --rm "$IMAGE_NAME" uuid | tr -d '\r')
     echo "已随机生成 UUID: $UUID"
 else
     UUID=$CUSTOM_UUID
     echo "使用自定义 UUID: $UUID"
 fi
 
+# 4.2 密钥 (关键修复部分)
 echo -e "\033[36m>>> 处理密钥对...\033[0m"
+
 if [ -z "$CUSTOM_PRIVATE_KEY" ]; then
     echo "未提供私钥，正在随机生成新的密钥对..."
-    # 修正：直接运行 x25519
-    KEYS=$(docker run --rm "$IMAGE_NAME" x25519)
-    PRIVATE_KEY=$(echo "$KEYS" | grep "Private" | awk '{print $3}')
-    PUBLIC_KEY=$(echo "$KEYS" | grep "Public" | awk '{print $3}')
+    # 获取原始输出
+    KEYS_RAW=$(docker run --rm "$IMAGE_NAME" x25519)
+    
+    # 使用 awk '{print $NF}' 获取最后一个字段，并强力去除回车符
+    PRIVATE_KEY=$(echo "$KEYS_RAW" | grep "Private" | awk '{print $NF}' | tr -d '\r')
+    PUBLIC_KEY=$(echo "$KEYS_RAW" | grep "Public" | awk '{print $NF}' | tr -d '\r')
 else
     echo "检测到自定义私钥，正在推导公钥..."
     PRIVATE_KEY=$CUSTOM_PRIVATE_KEY
-    # 修正：直接运行 x25519
-    KEYS=$(echo "$PRIVATE_KEY" | docker run --rm -i "$IMAGE_NAME" x25519 -i)
+    
+    # 验证私钥
+    KEYS_RAW=$(echo "$PRIVATE_KEY" | docker run --rm -i "$IMAGE_NAME" x25519 -i)
     if [ $? -ne 0 ]; then
         echo -e "\033[31m错误：提供的私钥无效！\033[0m"
         exit 1
     fi
-    PUBLIC_KEY=$(echo "$KEYS" | grep "Public" | awk '{print $3}')
+    PUBLIC_KEY=$(echo "$KEYS_RAW" | grep "Public" | awk '{print $NF}' | tr -d '\r')
+fi
+
+# 4.3 最后的空值检查 (防止生成空链接)
+if [ -z "$PRIVATE_KEY" ] || [ -z "$PUBLIC_KEY" ]; then
+    echo -e "\033[31m严重错误：无法获取密钥对！\033[0m"
+    echo "调试信息 (Raw Output):"
+    echo "$KEYS_RAW"
+    exit 1
 fi
 
 SHORT_ID=$(openssl rand -hex 4)
 
 echo "------------------------------------------------"
 echo "UUID:        $UUID"
+echo "Public Key:  $PUBLIC_KEY"
 echo "Short ID:    $SHORT_ID"
-echo "Port:        $PORT"
-echo "Domain:      $DOMAIN"
 echo "------------------------------------------------"
 
 # --- 5. 获取本机 IP ---
@@ -167,7 +178,6 @@ if docker compose version &>/dev/null; then
     docker compose down >/dev/null 2>&1
     docker compose up -d
 else
-    # 兼容旧版 docker-compose
     docker-compose down >/dev/null 2>&1
     docker-compose up -d
 fi
@@ -184,6 +194,7 @@ echo "地址: $IP"
 echo "端口: $PORT"
 echo "UUID: $UUID"
 echo "Public Key: $PUBLIC_KEY"
+echo "Private Key: $PRIVATE_KEY"
 echo "-------------------------------------------------------"
 echo -e "分享链接: \n\033[33m$VLESS_URL\033[0m"
 echo ""
