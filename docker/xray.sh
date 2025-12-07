@@ -192,6 +192,6 @@ docker compose up -d
 FINGERPRINT="chrome"
 VLESS_URL="vless://$UUID@${IP}:${PORT}?encryption=none&security=reality&type=tcp&sni=$DOMAIN&fp=$FINGERPRINT&pbk=$PUBLIC_KEY&sid=$SHORT_ID&flow=xtls-rprx-vision#Xray_Reality_${IP}"
 
-echo "$VLESS_URL" > ~/url.txt
+echo "$VLESS_URL" > ~/xray/url
 echo -e "\n\033[32m✅ 部署完成！\033[0m"
 echo -e "分享链接:\n\033[33m$VLESS_URL\033[0m\n"
