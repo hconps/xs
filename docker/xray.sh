@@ -2,7 +2,7 @@
 
 # ==============================================================
 # 功能：Docker Compose 部署 Xray VLESS-Reality (Host模式)
-# 特性：支持参数化运行、强制去除回车符、更强的容错性
+# 特性：临时文件处理密钥 (高稳定性)、支持参数化、自动配置
 # ==============================================================
 
 # --- 1. 定义默认变量 ---
@@ -12,6 +12,7 @@ CUSTOM_UUID=""
 CUSTOM_PRIVATE_KEY=""
 WORK_DIR="/root/xray"
 IMAGE_NAME="ghcr.io/xtls/xray-core:latest"
+TEMP_KEY_FILE="/tmp/xray_keys.txt"
 
 # --- 2. 解析命令行参数 ---
 usage() {
@@ -43,7 +44,6 @@ DOMAIN=${SNI:-$DEFAULT_SNI}
 echo -e "\033[36m>>> 正在检查 Docker 环境...\033[0m"
 
 if ! command -v curl &> /dev/null; then
-    echo "正在安装 curl..."
     if [ -f /etc/debian_version ]; then
         apt-get update && apt-get install -y curl
     elif [ -f /etc/redhat-release ]; then
@@ -67,11 +67,10 @@ mkdir -p "$WORK_DIR"
 echo -e "\033[36m>>> 拉取 Xray 官方镜像...\033[0m"
 docker pull "$IMAGE_NAME"
 
-# --- 4. 密钥与 UUID 处理逻辑 (修复版) ---
+# --- 4. 密钥与 UUID 处理逻辑 (文件缓冲模式) ---
 
 # 4.1 UUID
 if [ -z "$CUSTOM_UUID" ]; then
-    # 增加 tr -d '\r' 去除可能存在的 Windows 回车符
     UUID=$(docker run --rm "$IMAGE_NAME" uuid | tr -d '\r')
     echo "已随机生成 UUID: $UUID"
 else
@@ -79,37 +78,45 @@ else
     echo "使用自定义 UUID: $UUID"
 fi
 
-# 4.2 密钥 (关键修复部分)
+# 4.2 密钥 (使用临时文件方案)
 echo -e "\033[36m>>> 处理密钥对...\033[0m"
 
 if [ -z "$CUSTOM_PRIVATE_KEY" ]; then
     echo "未提供私钥，正在随机生成新的密钥对..."
-    # 获取原始输出
-    KEYS_RAW=$(docker run --rm "$IMAGE_NAME" x25519)
+    # 将输出同时写入文件，包含标准输出和标准错误
+    docker run --rm "$IMAGE_NAME" x25519 > "$TEMP_KEY_FILE" 2>&1
     
-    # 使用 awk '{print $NF}' 获取最后一个字段，并强力去除回车符
-    PRIVATE_KEY=$(echo "$KEYS_RAW" | grep "Private" | awk '{print $NF}' | tr -d '\r')
-    PUBLIC_KEY=$(echo "$KEYS_RAW" | grep "Public" | awk '{print $NF}' | tr -d '\r')
+    # 从文件读取，awk $3 代表第三列 (Private Key: xxxx)
+    PRIVATE_KEY=$(grep "Private Key:" "$TEMP_KEY_FILE" | awk '{print $3}' | tr -d '\r')
+    PUBLIC_KEY=$(grep "Public Key:" "$TEMP_KEY_FILE" | awk '{print $3}' | tr -d '\r')
 else
     echo "检测到自定义私钥，正在推导公钥..."
     PRIVATE_KEY=$CUSTOM_PRIVATE_KEY
     
-    # 验证私钥
-    KEYS_RAW=$(echo "$PRIVATE_KEY" | docker run --rm -i "$IMAGE_NAME" x25519 -i)
-    if [ $? -ne 0 ]; then
-        echo -e "\033[31m错误：提供的私钥无效！\033[0m"
+    # 验证私钥并输出到文件
+    echo "$PRIVATE_KEY" | docker run --rm -i "$IMAGE_NAME" x25519 -i > "$TEMP_KEY_FILE" 2>&1
+    
+    # 检查命令是否执行成功（文件是否包含 Public Key）
+    if ! grep -q "Public Key:" "$TEMP_KEY_FILE"; then
+        echo -e "\033[31m错误：提供的私钥无效或无法推导！\033[0m"
+        cat "$TEMP_KEY_FILE"
         exit 1
     fi
-    PUBLIC_KEY=$(echo "$KEYS_RAW" | grep "Public" | awk '{print $NF}' | tr -d '\r')
+    PUBLIC_KEY=$(grep "Public Key:" "$TEMP_KEY_FILE" | awk '{print $3}' | tr -d '\r')
 fi
 
-# 4.3 最后的空值检查 (防止生成空链接)
+# 4.3 强力检查
 if [ -z "$PRIVATE_KEY" ] || [ -z "$PUBLIC_KEY" ]; then
     echo -e "\033[31m严重错误：无法获取密钥对！\033[0m"
-    echo "调试信息 (Raw Output):"
-    echo "$KEYS_RAW"
+    echo ">>> 调试信息 (Docker 原始输出):"
+    cat "$TEMP_KEY_FILE"
+    echo "----------------------------"
+    rm -f "$TEMP_KEY_FILE"
     exit 1
 fi
+
+# 清理临时文件
+rm -f "$TEMP_KEY_FILE"
 
 SHORT_ID=$(openssl rand -hex 4)
 
