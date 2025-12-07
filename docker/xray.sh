@@ -78,10 +78,9 @@ else
     echo "使用 UUID: $UUID"
 fi
 
-# 4.2 ShortID (参考你提供的脚本逻辑)
+# 4.2 ShortID 
 if [ -z "$CUSTOM_SHORT_ID" ]; then
-    # 如果没有指定，使用 UUID 的哈希前16位作为 ShortID
-    SHORT_ID=$(echo -n "${UUID}" | sha1sum | head -c 16)
+    SHORT_ID=$(openssl rand -hex 4)
 else
     SHORT_ID=$CUSTOM_SHORT_ID
 fi
