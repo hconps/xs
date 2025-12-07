@@ -1,135 +1,140 @@
 #!/bin/bash
 
 # ==============================================================
-# 功能：Docker Compose 部署 Xray VLESS-Reality (Host模式)
-# 特性：临时文件处理密钥 (高稳定性)、支持参数化、自动配置
+# 功能：Docker Xray VLESS-Reality (融合版)
+# 特点：使用 grep -oP 正则匹配，兼容所有版本 Xray 输出格式
 # ==============================================================
 
-# --- 1. 定义默认变量 ---
-DEFAULT_PORT=28888
-DEFAULT_SNI="www.microsoft.com"
+# --- 1. 默认变量 ---
+DEFAULT_PORT=443
+DEFAULT_SNI="learn.microsoft.com"
 CUSTOM_UUID=""
 CUSTOM_PRIVATE_KEY=""
+CUSTOM_SHORT_ID=""
 WORK_DIR="/root/xray"
-IMAGE_NAME="ghcr.io/xtls/xray-core:latest"
-TEMP_KEY_FILE="/tmp/xray_keys.txt"
+IMAGE_NAME="ghcr.io/xtls/xray-core:latest" 
 
-# --- 2. 解析命令行参数 ---
+# --- 2. 解析参数 ---
 usage() {
     echo "用法: $0 [选项]"
     echo "选项:"
-    echo "  -p <port>    监听端口 (默认: 28888)"
-    echo "  -s <domain>  伪装域名/SNI (默认: www.microsoft.com)"
-    echo "  -u <uuid>    自定义 UUID (默认: 随机生成)"
-    echo "  -k <key>     自定义私钥 PrivateKey (默认: 随机生成，自动推导公钥)"
-    echo "  -h           显示帮助"
+    echo "  -p <port>      监听端口 (默认: 443)"
+    echo "  -s <domain>    伪装域名 (默认: learn.microsoft.com)"
+    echo "  -u <uuid>      自定义 UUID"
+    echo "  -k <key>       自定义私钥 (会自动推导公钥)"
+    echo "  -i <shortid>   自定义 ShortID"
+    echo "  -h             显示帮助"
     exit 1
 }
 
-while getopts "p:s:u:k:h" opt; do
+while getopts "p:s:u:k:i:h" opt; do
     case "$opt" in
         p) PORT=$OPTARG ;;
         s) SNI=$OPTARG ;;
         u) CUSTOM_UUID=$OPTARG ;;
         k) CUSTOM_PRIVATE_KEY=$OPTARG ;;
+        i) CUSTOM_SHORT_ID=$OPTARG ;;
         h) usage ;;
         *) usage ;;
     esac
 done
 
+# 应用默认值
 PORT=${PORT:-$DEFAULT_PORT}
 DOMAIN=${SNI:-$DEFAULT_SNI}
 
-# --- 3. 环境检查与准备 ---
-echo -e "\033[36m>>> 正在检查 Docker 环境...\033[0m"
-
-if ! command -v curl &> /dev/null; then
+# --- 3. 环境准备 ---
+echo -e "\033[36m>>> 检查环境...\033[0m"
+# 确保安装了 grep 且支持 -P (Perl正则)
+if ! echo "test" | grep -P "test" &>/dev/null; then
+    echo "正在安装 grep (用于正则匹配)..."
     if [ -f /etc/debian_version ]; then
-        apt-get update && apt-get install -y curl
+        apt-get update && apt-get install -y grep
     elif [ -f /etc/redhat-release ]; then
-        yum install -y curl
+        yum install -y grep
     fi
 fi
 
+# Docker 检查
 if ! command -v docker &> /dev/null; then
-    echo "Docker 未安装，正在安装..."
+    echo "安装 Docker..."
     curl -fsSL https://get.docker.com | bash
     systemctl enable docker
     systemctl start docker
 fi
 
-if ! command -v docker &> /dev/null; then
-    echo -e "\033[31mDocker 安装失败，请手动检查环境。\033[0m"
-    exit 1
-fi
-
 mkdir -p "$WORK_DIR"
-echo -e "\033[36m>>> 拉取 Xray 官方镜像...\033[0m"
+echo -e "\033[36m>>> 拉取镜像 ($IMAGE_NAME)...\033[0m"
 docker pull "$IMAGE_NAME"
 
-# --- 4. 密钥与 UUID 处理逻辑 (文件缓冲模式) ---
+# --- 4. 核心逻辑：UUID 和 ShortID ---
 
 # 4.1 UUID
 if [ -z "$CUSTOM_UUID" ]; then
-    UUID=$(docker run --rm "$IMAGE_NAME" uuid | tr -d '\r')
-    echo "已随机生成 UUID: $UUID"
+    UUID=$(docker run --rm "$IMAGE_NAME" uuid | tr -d '\r\n ')
+    echo "已生成 UUID: $UUID"
 else
     UUID=$CUSTOM_UUID
-    echo "使用自定义 UUID: $UUID"
+    echo "使用 UUID: $UUID"
 fi
 
-# 4.2 密钥 (使用临时文件方案)
+# 4.2 ShortID (参考你提供的脚本逻辑)
+if [ -z "$CUSTOM_SHORT_ID" ]; then
+    # 如果没有指定，使用 UUID 的哈希前16位作为 ShortID
+    SHORT_ID=$(echo -n "${UUID}" | sha1sum | head -c 16)
+else
+    SHORT_ID=$CUSTOM_SHORT_ID
+fi
+
+# --- 5. 核心逻辑：密钥生成 (使用 grep -oP) ---
 echo -e "\033[36m>>> 处理密钥对...\033[0m"
 
-if [ -z "$CUSTOM_PRIVATE_KEY" ]; then
-    echo "未提供私钥，正在随机生成新的密钥对..."
-    # 将输出同时写入文件，包含标准输出和标准错误
-    docker run --rm "$IMAGE_NAME" x25519 > "$TEMP_KEY_FILE" 2>&1
+# 定义清理函数
+clean() { echo "$1" | tr -d ' \r\n\t'; }
+
+if [ -n "$CUSTOM_PRIVATE_KEY" ]; then
+    # === 场景 A: 用户提供了私钥 ===
+    echo "正在根据私钥推导..."
+    PRIVATE_KEY=$(clean "$CUSTOM_PRIVATE_KEY")
     
-    # 从文件读取，awk $3 代表第三列 (Private Key: xxxx)
-    PRIVATE_KEY=$(grep "Private Key:" "$TEMP_KEY_FILE" | awk '{print $3}' | tr -d '\r')
-    PUBLIC_KEY=$(grep "Public Key:" "$TEMP_KEY_FILE" | awk '{print $3}' | tr -d '\r')
+    # 管道传入私钥 -> Docker Xray -> 获取输出
+    OUTPUT=$(echo "$PRIVATE_KEY" | docker run --rm -i "$IMAGE_NAME" x25519 -i 2>&1)
+    
+    # 使用正则提取：匹配 "Public key: " 或 "Password: " 后面的内容
+    PUBLIC_KEY=$(echo "$OUTPUT" | grep -oP '(?<=Public key: |Password: ).*')
 else
-    echo "检测到自定义私钥，正在推导公钥..."
-    PRIVATE_KEY=$CUSTOM_PRIVATE_KEY
+    # === 场景 B: 自动生成 ===
+    echo "正在生成新密钥对..."
+    OUTPUT=$(docker run --rm "$IMAGE_NAME" x25519 2>&1)
     
-    # 验证私钥并输出到文件
-    echo "$PRIVATE_KEY" | docker run --rm -i "$IMAGE_NAME" x25519 -i > "$TEMP_KEY_FILE" 2>&1
-    
-    # 检查命令是否执行成功（文件是否包含 Public Key）
-    if ! grep -q "Public Key:" "$TEMP_KEY_FILE"; then
-        echo -e "\033[31m错误：提供的私钥无效或无法推导！\033[0m"
-        cat "$TEMP_KEY_FILE"
-        exit 1
-    fi
-    PUBLIC_KEY=$(grep "Public Key:" "$TEMP_KEY_FILE" | awk '{print $3}' | tr -d '\r')
+    # 使用正则提取：同时兼容旧版和新版字段名
+    PRIVATE_KEY=$(echo "$OUTPUT" | grep -oP '(?<=Private key: |PrivateKey: ).*')
+    PUBLIC_KEY=$(echo "$OUTPUT" | grep -oP '(?<=Public key: |Password: ).*')
 fi
 
-# 4.3 强力检查
-if [ -z "$PRIVATE_KEY" ] || [ -z "$PUBLIC_KEY" ]; then
-    echo -e "\033[31m严重错误：无法获取密钥对！\033[0m"
-    echo ">>> 调试信息 (Docker 原始输出):"
-    cat "$TEMP_KEY_FILE"
-    echo "----------------------------"
-    rm -f "$TEMP_KEY_FILE"
+# 再次清理结果，防止 grep 抓到尾部回车
+PRIVATE_KEY=$(clean "$PRIVATE_KEY")
+PUBLIC_KEY=$(clean "$PUBLIC_KEY")
+
+# 检查是否成功
+if [ -z "$PUBLIC_KEY" ]; then
+    echo -e "\033[31m错误：密钥提取失败！\033[0m"
+    echo "原始输出如下，请检查："
+    echo "$OUTPUT"
     exit 1
 fi
 
-# 清理临时文件
-rm -f "$TEMP_KEY_FILE"
-
-SHORT_ID=$(openssl rand -hex 4)
-
 echo "------------------------------------------------"
 echo "UUID:        $UUID"
-echo "Public Key:  $PUBLIC_KEY"
 echo "Short ID:    $SHORT_ID"
+echo "Private Key: $PRIVATE_KEY"
+echo "Public Key:  $PUBLIC_KEY"
 echo "------------------------------------------------"
 
-# --- 5. 获取本机 IP ---
-IP=$(curl -s ipv4.ip.sb || curl -s ifconfig.me || curl -s ipinfo.io/ip)
+# --- 6. 获取 IP ---
+IP=$(curl -s ipv4.ip.sb || curl -s ifconfig.me)
 
-# --- 6. 生成配置 ---
+# --- 7. 生成配置文件 ---
 cat > "$WORK_DIR/compose.yaml" << EOF
 services:
   xray:
@@ -178,31 +183,16 @@ cat > "$WORK_DIR/config.json" << EOF
 }
 EOF
 
-# --- 7. 启动服务 ---
-echo -e "\033[36m>>> 启动 Xray 服务...\033[0m"
+# --- 8. 启动 ---
 cd "$WORK_DIR"
-if docker compose version &>/dev/null; then
-    docker compose down >/dev/null 2>&1
-    docker compose up -d
-else
-    docker-compose down >/dev/null 2>&1
-    docker-compose up -d
-fi
+docker compose down >/dev/null 2>&1
+docker compose up -d
 
-# --- 8. 输出结果 ---
-VLESS_URL="vless://$UUID@${IP}:${PORT}?encryption=none&security=reality&type=tcp&sni=$DOMAIN&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&flow=xtls-rprx-vision#Xray_Reality_${IP}"
+# --- 9. 输出链接 ---
+# 链接中的指纹 fingerprint 建议用 chrome 或 random，这里用 chrome
+FINGERPRINT="chrome"
+VLESS_URL="vless://$UUID@${IP}:${PORT}?encryption=none&security=reality&type=tcp&sni=$DOMAIN&fp=$FINGERPRINT&pbk=$PUBLIC_KEY&sid=$SHORT_ID&flow=xtls-rprx-vision#Xray_Reality_${IP}"
+
 echo "$VLESS_URL" > ~/url.txt
-
-echo ""
-echo "======================================================="
-echo -e "\033[32m部署完成！\033[0m"
-echo "======================================================="
-echo "地址: $IP"
-echo "端口: $PORT"
-echo "UUID: $UUID"
-echo "Public Key: $PUBLIC_KEY"
-echo "Private Key: $PRIVATE_KEY"
-echo "-------------------------------------------------------"
-echo -e "分享链接: \n\033[33m$VLESS_URL\033[0m"
-echo ""
-echo "======================================================="
+echo -e "\n\033[32m✅ 部署完成！\033[0m"
+echo -e "分享链接:\n\033[33m$VLESS_URL\033[0m\n"
