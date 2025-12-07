@@ -111,12 +111,24 @@ if [[ "$remote_content" == *"\"errors\":["* ]]; then
     remote_content=""
 fi
 
-# 5. 对比查重
-# 注意：这里查重用的是转换后的符号，所以只要 KV 里有了 €34，你再输 34o 也会被拦截，很完美
+# 5. 对比查重与覆盖询问
+# 注意：这里查重用的是转换后的符号
 if echo "$remote_content" | grep -q "#${node_alias}$"; then
-    echo -e "${red}❌ 错误：列表中已存在备注为 [#${node_alias}] 的节点！${none}"
-    echo "跳过上传操作。"
-    exit 0
+    echo -e "${yellow}⚠️  发现重复：列表中已存在备注为 [#${node_alias}] 的节点！${none}"
+    read -p "是否覆盖旧节点？(输入 y 覆盖，回车或其它键跳过): " overwrite_choice
+    
+    case "$overwrite_choice" in
+        [yY]|[yY][eE][sS])
+            echo -e "${green}>>> 正在删除旧节点，准备写入新配置...${none}"
+            # 核心逻辑：使用 grep -v 反选，将旧的这一行从变量中删除
+            # 这样后续追加新链接时，就相当于实现了"覆盖"
+            remote_content=$(echo "$remote_content" | grep -v "#${node_alias}$")
+            ;;
+        *)
+            echo "已取消覆盖，跳过上传操作。"
+            exit 0
+            ;;
+    esac
 fi
 
 # 6. 合并与排序
