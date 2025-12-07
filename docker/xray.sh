@@ -3,6 +3,7 @@
 # ==============================================================
 # 功能：Docker Compose 部署 Xray VLESS-Reality (Host模式)
 # 特性：支持参数化运行、自动生成/推导密钥、输出分享链接
+# 修正：修复官方镜像 Entrypoint 导致的 "xray xray" 命令重复错误
 # ==============================================================
 
 # --- 1. 定义默认变量 ---
@@ -42,7 +43,6 @@ DOMAIN=${SNI:-$DEFAULT_SNI}
 # --- 3. 环境检查与准备 ---
 echo -e "\033[36m>>> 正在检查 Docker 环境...\033[0m"
 
-# 检查 curl，防止系统极简缺少 curl
 if ! command -v curl &> /dev/null; then
     echo "正在安装 curl..."
     if [ -f /etc/debian_version ]; then
@@ -61,7 +61,6 @@ else
     echo "Docker 已安装。"
 fi
 
-# 再次检查 Docker 是否成功运行
 if ! command -v docker &> /dev/null; then
     echo -e "\033[31mDocker 安装失败或未启动，请手动检查环境。\033[0m"
     exit 1
@@ -71,10 +70,10 @@ mkdir -p "$WORK_DIR"
 echo -e "\033[36m>>> 拉取 Xray 官方镜像...\033[0m"
 docker pull "$IMAGE_NAME"
 
-# --- 4. 密钥与 UUID 处理逻辑 ---
-# 这里的逻辑非常依赖 [] 语法的正确性，必须是 LF 换行符
+# --- 4. 密钥与 UUID 处理逻辑 (已修复命令) ---
 if [ -z "$CUSTOM_UUID" ]; then
-    UUID=$(docker run --rm "$IMAGE_NAME" xray uuid)
+    # 修正：直接运行 uuid，不需要加 xray 前缀
+    UUID=$(docker run --rm "$IMAGE_NAME" uuid)
     echo "已随机生成 UUID: $UUID"
 else
     UUID=$CUSTOM_UUID
@@ -84,13 +83,15 @@ fi
 echo -e "\033[36m>>> 处理密钥对...\033[0m"
 if [ -z "$CUSTOM_PRIVATE_KEY" ]; then
     echo "未提供私钥，正在随机生成新的密钥对..."
-    KEYS=$(docker run --rm "$IMAGE_NAME" xray x25519)
+    # 修正：直接运行 x25519
+    KEYS=$(docker run --rm "$IMAGE_NAME" x25519)
     PRIVATE_KEY=$(echo "$KEYS" | grep "Private" | awk '{print $3}')
     PUBLIC_KEY=$(echo "$KEYS" | grep "Public" | awk '{print $3}')
 else
     echo "检测到自定义私钥，正在推导公钥..."
     PRIVATE_KEY=$CUSTOM_PRIVATE_KEY
-    KEYS=$(echo "$PRIVATE_KEY" | docker run --rm -i "$IMAGE_NAME" xray x25519 -i)
+    # 修正：直接运行 x25519
+    KEYS=$(echo "$PRIVATE_KEY" | docker run --rm -i "$IMAGE_NAME" x25519 -i)
     if [ $? -ne 0 ]; then
         echo -e "\033[31m错误：提供的私钥无效！\033[0m"
         exit 1
