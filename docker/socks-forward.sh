@@ -19,7 +19,8 @@ PORT=""
 USERNAME=""
 PASSWORD=""
 
-while getopts "a:p:m:k:h" opt; do
+# ⭐ getopts 正确写法
+while getopts "a:p:u:w:h" opt; do
   case $opt in
     a) ADDRESS="$OPTARG" ;;
     p) PORT="$OPTARG" ;;
@@ -30,28 +31,23 @@ while getopts "a:p:m:k:h" opt; do
   esac
 done
 
+# ⭐ 未带参则询问
 [ -z "$ADDRESS" ] && read -p "请输入 address: " ADDRESS
 [ -z "$PORT" ] && read -p "请输入 port: " PORT
-# 用户名密码可选
 [ -z "$USERNAME" ] && read -p "请输入 username(可空): " USERNAME
 [ -z "$PASSWORD" ] && read -p "请输入 password(可空): " PASSWORD
 
 docker compose stop
 
-# 备份
 cp "$CONFIG_FILE" "$BACKUP_FILE"
 echo "已备份到: $BACKUP_FILE"
 
-# ============================
 # 插入 SOCKS 客户端 outbound
-# ============================
 if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
-    # 有用户名密码
     sed -i "26i\\
     {\"protocol\": \"socks\",\"settings\": {\"servers\": [{\"address\": \"$ADDRESS\", \"port\": $PORT, \"users\": [{\"user\": \"$USERNAME\", \"pass\": \"$PASSWORD\"}]}]}}, 
 " "$CONFIG_FILE"
 else
-    # 无用户名密码（匿名 socks）
     sed -i "26i\\
     {\"protocol\": \"socks\",\"settings\": {\"servers\": [{\"address\": \"$ADDRESS\", \"port\": $PORT}]}}, 
 " "$CONFIG_FILE"
