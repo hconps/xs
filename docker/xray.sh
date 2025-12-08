@@ -94,19 +94,20 @@ clean() { echo "$1" | tr -d ' \r\n\t'; }
 if [ -n "$CUSTOM_PRIVATE_KEY" ]; then
     # === 场景 A: 用户提供了私钥 ===
     echo "正在根据私钥推导..."
+
     PRIVATE_KEY=$(clean "$CUSTOM_PRIVATE_KEY")
-    
-    # 管道传入私钥 -> Docker Xray -> 获取输出
-    OUTPUT=$(echo "$PRIVATE_KEY" | docker run --rm -i "$IMAGE_NAME" x25519 -i 2>&1)
-    
-    # 使用正则提取：匹配 "Public key: " 或 "Password: " 后面的内容
+
+    # 直接把私钥作为参数传入 x25519
+    OUTPUT=$(docker run --rm "$IMAGE_NAME" x25519 -i "$PRIVATE_KEY" 2>&1)
+
     PUBLIC_KEY=$(echo "$OUTPUT" | grep -oP '(?<=Public key: |Password: ).*')
+
 else
     # === 场景 B: 自动生成 ===
     echo "正在生成新密钥对..."
+
     OUTPUT=$(docker run --rm "$IMAGE_NAME" x25519 2>&1)
-    
-    # 使用正则提取：同时兼容旧版和新版字段名
+
     PRIVATE_KEY=$(echo "$OUTPUT" | grep -oP '(?<=Private key: |PrivateKey: ).*')
     PUBLIC_KEY=$(echo "$OUTPUT" | grep -oP '(?<=Public key: |Password: ).*')
 fi
