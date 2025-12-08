@@ -5,11 +5,11 @@ CONFIG_FILE="/root/xray/config.json"
 BACKUP_FILE="/root/xray/config.json.bk_$(date +%Y%m%d_%H%M%S)"
 
 usage() {
-    echo "用法: $0 [-a address] [-p port] [-m username] [-k password]"
+    echo "用法: $0 [-a address] [-p port] [-u username] [-w password]"
     echo "  -a    socks5 服务器地址"
     echo "  -p    端口号"
-    echo "  -m    用户名（可选）"
-    echo "  -k    密码（可选）"
+    echo "  -u    用户名（可选）"
+    echo "  -w    密码（可选）"
     echo "  -h    显示帮助"
     exit 1
 }
@@ -23,8 +23,8 @@ while getopts "a:p:m:k:h" opt; do
   case $opt in
     a) ADDRESS="$OPTARG" ;;
     p) PORT="$OPTARG" ;;
-    m) USERNAME="$OPTARG" ;;
-    k) PASSWORD="$OPTARG" ;;
+    u) USERNAME="$OPTARG" ;;
+    w) PASSWORD="$OPTARG" ;;
     h) usage ;;
     *) usage ;;
   esac
