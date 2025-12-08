@@ -19,7 +19,7 @@ PORT=""
 USERNAME=""
 PASSWORD=""
 
-# ⭐ getopts 正确写法
+# 注意：这里修复了 getopts
 while getopts "a:p:u:w:h" opt; do
   case $opt in
     a) ADDRESS="$OPTARG" ;;
@@ -31,7 +31,7 @@ while getopts "a:p:u:w:h" opt; do
   esac
 done
 
-# ⭐ 未带参则询问
+# 未带参则询问
 [ -z "$ADDRESS" ] && read -p "请输入 address: " ADDRESS
 [ -z "$PORT" ] && read -p "请输入 port: " PORT
 [ -z "$USERNAME" ] && read -p "请输入 username(可空): " USERNAME
@@ -39,10 +39,11 @@ done
 
 docker compose stop
 
+# 备份
 cp "$CONFIG_FILE" "$BACKUP_FILE"
 echo "已备份到: $BACKUP_FILE"
 
-# 插入 SOCKS 客户端 outbound
+# ---- 插入 SOCKS 客户端 outbound ----
 if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
     sed -i "26i\\
     {\"protocol\": \"socks\",\"settings\": {\"servers\": [{\"address\": \"$ADDRESS\", \"port\": $PORT, \"users\": [{\"user\": \"$USERNAME\", \"pass\": \"$PASSWORD\"}]}]}}, 
