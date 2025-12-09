@@ -38,7 +38,7 @@ done
 [ -z "$METHOD" ] && read -p "请输入 method: " METHOD
 [ -z "$PASSWORD" ] && read -p "请输入 password: " PASSWORD
 
-docker compose stop
+#docker compose stop
 
 # 备份
 cp "$CONFIG_FILE" "$BACKUP_FILE"
@@ -52,5 +52,7 @@ sed -i "26i\\
 echo "已修改配置文件: $CONFIG_FILE"
 
 # 重启 xray 服务
-docker compose up -d
+cd xray
+docker compose restart xray
+#docker compose up -d
 echo "xray 服务已重启"
