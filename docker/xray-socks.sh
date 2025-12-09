@@ -62,7 +62,7 @@ cat > "$WORK_DIR/compose.yaml" << EOF
 services:
   xray:
     image: $IMAGE_NAME
-    container_name: xray-socks
+    container_name: xray
     restart: always
     network_mode: host
     command: ["run", "-c", "/etc/xray/config.json"]
