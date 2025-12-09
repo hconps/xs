@@ -5,11 +5,11 @@ CONFIG_FILE="/root/xray/config.json"
 BACKUP_FILE="/root/xray/config.json.bk_$(date +%Y%m%d_%H%M%S)"
 
 usage() {
-    echo "用法: $0 [-a address] [-p port] [-m method] [-k password]"
+    echo "用法: $0 [-a address] [-p port] [-m method] [-w password]"
     echo "  -a    shadowsocks 服务器地址"
     echo "  -p    端口号"
     echo "  -m    加密方式 (如 aes-256-gcm)"
-    echo "  -k    密码"
+    echo "  -w    密码"
     echo "  -h    显示帮助"
     exit 1
 }
@@ -21,12 +21,12 @@ METHOD=""
 PASSWORD=""
 
 # 解析参数
-while getopts "a:p:m:k:h" opt; do
+while getopts "a:p:m:w:h" opt; do
   case $opt in
     a) ADDRESS="$OPTARG" ;;
     p) PORT="$OPTARG" ;;
     m) METHOD="$OPTARG" ;;
-    k) PASSWORD="$OPTARG" ;;
+    w) PASSWORD="$OPTARG" ;;
     h) usage ;;
     *) usage ;;
   esac
