@@ -16,8 +16,8 @@ usage() {
 
 # 默认值为空
 ADDRESS=""
-PORT=""
-METHOD=""
+PORT="8888"
+METHOD="aes-256-gcm"
 PASSWORD=""
 
 # 解析参数
