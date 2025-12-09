@@ -9,7 +9,7 @@
 DEFAULT_PORT=8388
 DEFAULT_PASS="password"
 DEFAULT_METHOD="aes-256-gcm"  # 推荐使用 aes-256-gcm 或 chacha20-poly1305
-WORK_DIR="/root/xray-ss"
+WORK_DIR="/root/xray"
 IMAGE_NAME="ghcr.io/xtls/xray-core:latest"
 
 # ===========================
@@ -77,7 +77,7 @@ cat > "$WORK_DIR/compose.yaml" << EOF
 services:
   xray:
     image: $IMAGE_NAME
-    container_name: xray-ss
+    container_name: xray
     restart: always
     network_mode: host
     command: ["run", "-c", "/etc/xray/config.json"]
