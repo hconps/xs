@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # ==============================================================================
-# 功能：强制重置 Xray Outbounds 为：SOCKS5 + 默认规则
-# 修复：解决 mv 命令导致 Docker 挂载失效的问题
+# 功能：强制 SOCKS5 + 强制 IPv4 (解决 IPv6 路由不稳导致的断流)
+# 核心修改：将 domainStrategy 设为 UseIPv4
 # ==============================================================================
 
 WORK_DIR="/root/xray"
@@ -25,19 +25,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# --- 2. 恢复模式检测 ---
+# --- 2. 恢复检测 (可选) ---
 cd "$WORK_DIR" || exit 1
 if ls $BACKUP_PATTERN 1> /dev/null 2>&1; then
     OLDEST_BACKUP=$(ls -1 $BACKUP_PATTERN | sort | head -n 1)
-    echo "--------------------------------------------------------"
-    echo "📅 发现最早备份: $OLDEST_BACKUP"
-    read -p "❓ 是否放弃修改，直接恢复纯净配置并重启？[y/N]: " RESTORE_CHOICE
+    read -p "❓ 是否恢复最早备份？[y/N]: " RESTORE_CHOICE
     if [[ "$RESTORE_CHOICE" =~ ^[yY]$ ]]; then
-        echo ">>> 恢复中 (使用 cat 保持 inode)..."
         cat "$OLDEST_BACKUP" > "$CONFIG_FILE"
         chmod 644 "$CONFIG_FILE"
         docker compose restart
-        echo "✅ 已恢复并重启。脚本退出。"
         exit 0
     fi
 fi
@@ -53,15 +49,11 @@ fi
 # --- 4. 备份 ---
 cp "$CONFIG_FILE" "${CONFIG_FILE}.bk_$(date +%Y%m%d_%H%M%S)"
 
-# --- 5. 使用 jq 覆盖 Outbounds (核心逻辑) ---
-echo ">>> 正在重写配置文件..."
+# --- 5. 写入配置 (强制 UseIPv4) ---
+echo ">>> 正在应用 IPv4 优先策略..."
 
 TMP_FILE=$(mktemp)
 
-# jq 逻辑说明：
-# 1. 构造新的 proxy 对象 ($proxy)
-# 2. 构造固定的默认规则列表 ($defaults)
-# 3. 将 .outbounds 直接赋值为 [$proxy] + $defaults (彻底替换旧列表)
 jq --arg addr "$ADDRESS" \
    --arg port "$PORT" \
    --arg user "$USERNAME" \
@@ -71,6 +63,7 @@ jq --arg addr "$ADDRESS" \
    (
      if $user != "" and $pass != "" then
        {
+         tag: "proxy-landing",
          protocol: "socks",
          settings: {
            servers: [{ address: $addr, port: ($port | tonumber), users: [{user: $user, pass: $pass}] }]
@@ -78,6 +71,7 @@ jq --arg addr "$ADDRESS" \
        }
      else
        {
+         tag: "proxy-landing",
          protocol: "socks",
          settings: {
            servers: [{ address: $addr, port: ($port | tonumber) }]
@@ -86,7 +80,7 @@ jq --arg addr "$ADDRESS" \
      end
    ) as $proxy |
    
-   # 2. 定义你要求的固定后置规则
+   # 2. 默认出站
    [
      {"protocol": "freedom", "tag": "direct"},
      {"protocol": "freedom", "settings": {"domainStrategy": "UseIPv4"}, "tag": "force-ipv4"},
@@ -94,24 +88,39 @@ jq --arg addr "$ADDRESS" \
      {"protocol": "blackhole", "tag": "block"}
    ] as $defaults |
 
-   # 3. 覆盖 outbounds (保持其他配置不变)
-   .outbounds = [$proxy] + $defaults
+   # 3. 覆盖 outbounds
+   .outbounds = [$proxy] + $defaults |
+
+   # 4. 路由规则：核心修改在这里！
+   # domainStrategy: "UseIPv4" -> 强制将 google.com 解析为 1.2.3.4 (IPv4)
+   # 这样 SOCKS5 就只会建立 IPv4 连接，避开不稳定的 IPv6
+   .routing = {
+     "domainStrategy": "UseIPv4",
+     "rules": [
+       {
+         "type": "field",
+         "outboundTag": "block",
+         "ip": ["geoip:private"]
+       },
+       {
+         "type": "field",
+         "outboundTag": "proxy-landing",
+         "network": "tcp,udp"
+       }
+     ]
+   }
    ' "$CONFIG_FILE" > "$TMP_FILE"
 
-# --- 6. 写入与重启 ---
+# --- 6. 应用 ---
 if [ -s "$TMP_FILE" ]; then
-    # 【关键修复】使用 cat 覆盖，保持文件 inode 不变，确保 Docker 能立刻读到
     cat "$TMP_FILE" > "$CONFIG_FILE"
     rm -f "$TMP_FILE"
-    
     chmod 644 "$CONFIG_FILE"
-    echo "✅ 配置文件修改成功 (格式已重置为 SOCKS + 默认规则)。"
     
-    echo ">>> 重启 Xray..."
+    echo "✅ 配置已更新：强制使用 IPv4 路由。"
     docker compose restart
-    echo "🎉 完成。"
+    echo "🎉 Xray 已重启。请再次尝试连接。"
 else
-    echo "❌ 修改失败，文件为空。"
-    rm -f "$TMP_FILE"
+    echo "❌ 失败。"
     exit 1
 fi
