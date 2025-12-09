@@ -31,7 +31,7 @@ done
 [ -z "$PORT" ] && read -p "请输入 port: " PORT
 [ -z "$USERNAME" ] && read -p "请输入 username(可空): " USERNAME
 [ -z "$PASSWORD" ] && read -p "请输入 password(可空): " PASSWORD
-#docker compose stop
+docker compose stop
 # 备份
 cp "$CONFIG_FILE" "$BACKUP_FILE"
 echo "已备份到: $BACKUP_FILE"
@@ -46,6 +46,5 @@ else
 " "$CONFIG_FILE"
 fi
 echo "已插入 SOCKS 客户端配置到: $CONFIG_FILE"
-cd /root/xray
-docker compose restart xray
+docker compose up -d
 echo "xray 服务已重启"
