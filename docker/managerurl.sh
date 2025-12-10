@@ -132,56 +132,14 @@ if echo "$remote_content" | grep -q "#${node_alias}$"; then
 fi
 
 # 6. 合并与排序
-#echo -e "${yellow}正在合并并排序...${none}"
-#combined_content="${remote_content}
-#${final_url}"
-
-# 过滤空行并排序
-#sorted_content=$(echo -e "$combined_content" | grep "vless://" | sort -t'#' -k 2)
-
-# 6. 合并与排序
 echo -e "${yellow}正在合并并排序...${none}"
 combined_content="${remote_content}
 ${final_url}"
 
-# 使用 awk + sort 实现多列排序 (无需 Python)
-# 逻辑：
-# 1. awk: 拆分出【前缀】(HK_Wawo) 和【数字价格】(22.5)，拼接到行首
-# 2. sort: 第一列按文本排序(保证组名顺序)，第二列按数字排序(解决 7.99 < 22.5)
-# 3. cut:  删掉行首的辅助信息，只保留原始链接
+# 过滤空行并排序
+sorted_content=$(echo -e "$combined_content" | grep "vless://" | sort -t'#' -k 2)
 
-sorted_content=$(echo -e "$combined_content" | grep "vless://" | awk -F'#' '
-{
-    # $NF 代表以 # 分割的最后一段，即备注
-    remark=$NF;
-    
-    # 寻找最后一个下划线 "_" 的位置
-    last_us = 0;
-    for(i=1; i<=length(remark); i++) {
-        if(substr(remark, i, 1) == "_") last_us = i;
-    }
 
-    # 根据下划线拆分前缀 (prefix) 和后缀 (suffix)
-    if (last_us > 0) {
-        prefix = substr(remark, 1, last_us-1);
-        suffix = substr(remark, last_us+1);
-    } else {
-        prefix = remark;
-        suffix = "";
-    }
-
-    # 从后缀中提取纯数字 (把所有非数字和非小数点的字符删掉)
-    # 例如 "¥22.5" -> "22.5", "Free" -> ""
-    price = suffix;
-    gsub(/[^0-9.]/, "", price);
-
-    # 如果没有数字 (比如 Free)，设为一个超大数 999999 让它排在最后
-    if (price == "") price = 999999;
-
-    # 打印格式: 前缀 <TAB> 价格 <TAB> 原始整行
-    # 使用 Tab 分隔是为了防止和 URL 里的字符冲突
-    print prefix "\t" price "\t" $0;
-}' | sort -t$'\t' -k1,1 -k2,2n | cut -f3-)
 
 
 # 7. 上传回 Cloudflare
