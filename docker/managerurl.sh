@@ -136,8 +136,15 @@ echo -e "${yellow}正在合并并排序...${none}"
 combined_content="${remote_content}
 ${final_url}"
 
-# 过滤空行并排序
-sorted_content=$(echo -e "$combined_content" | grep "vless://" | sort -t'#' -k 2)
+# 使用纯 Shell 逻辑：
+# 1. sed: 找到带货币符号的数字，在行首临时加 "1_数字 "; 没数字的加 "2_ " (确保排在最后)
+# 2. sort: 使用 -V (版本号排序) 或 -n -k1 (数值排序)
+# 3. cut:  删掉行首临时的辅助排序符
+
+sorted_content=$(echo -e "$combined_content" | grep "vless://" | \
+  sed -E 's/(.*[€¥£$])([0-9.]+).*/1_\2 \t&/; t; s/^/2_ \t/' | \
+  sort -t_ -k2 -n | \
+  cut -f2-)
 
 # 7. 上传回 Cloudflare
 echo -e "${yellow}正在上传...${none}"
