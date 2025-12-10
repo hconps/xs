@@ -136,8 +136,49 @@ echo -e "${yellow}正在合并并排序...${none}"
 combined_content="${remote_content}
 ${final_url}"
 
-# 过滤空行并排序
-sorted_content=$(echo -e "$combined_content" | grep "vless://" | sort -t'#' -k 2)
+# 使用 Python 实现：【组名(字符串排序) + 金额(数字排序)】
+sorted_content=$(echo -e "$combined_content" | grep "vless://" | python3 -c "
+import sys, re
+
+lines = [line.strip() for line in sys.stdin if line.strip()]
+
+def sort_key(line):
+    try:
+        # 获取备注部分
+        alias = line.split('#')[-1]
+        
+        # 1. 以【最后一个下划线】为界，拆分 组名(Prefix) 和 价格部分(Suffix)
+        # rsplit('_', 1) 意思是从右边切1刀
+        if '_' in alias:
+            prefix, suffix = alias.rsplit('_', 1)
+        else:
+            prefix, suffix = alias, ''
+
+        # 2. 提取价格部分的数字 (支持小数)
+        # 匹配 ¥/$/€ 后面的数字，或者纯数字
+        match = re.search(r'(\d+(\.\d+)?)', suffix)
+        
+        if match:
+            # 如果有数字，提取出来转为 float 类型，比如 7.99
+            price = float(match.group(1))
+        else:
+            # 如果没数字 (例如 Free)，设为 0 或者无限大，看你需求
+            # 这里设为 -1 让它排在最前面，或者设为 float('inf') 排在最后
+            price = float('inf') 
+
+        # 3. 返回排序元组 (A, B)
+        # Python 比较逻辑：先比 A (组名)，如果 A 相同，再比 B (价格)
+        # 组名按【字符】比：'HK_Wawo' < 'HK_✡️Wawo' (因为 W 的编码比 Emoji 小)
+        # 价格按【数字】比：7.99 < 22.5
+        return (prefix, price)
+
+    except:
+        return ('zzz', 999999)
+
+# 执行排序
+lines.sort(key=sort_key)
+print('\n'.join(lines))
+")
 
 # 7. 上传回 Cloudflare
 echo -e "${yellow}正在上传...${none}"
