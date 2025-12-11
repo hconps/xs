@@ -139,5 +139,6 @@ echo " 密码 (Pass): $SS_PASS"
 echo " 加密 (Method): $SS_METHOD"
 echo "-------------------------------------"
 echo " SS 链接 (可复制到客户端):"
-echo " $SS_LINK"
+echo "$SS_LINK" > ~/xray/url
+echo "$SS_LINK"
 echo "====================================="
