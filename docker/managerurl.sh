@@ -137,7 +137,10 @@ combined_content="${remote_content}
 ${final_url}"
 
 # 过滤空行并排序
-sorted_content=$(echo -e "$combined_content" | grep "vless://" | sort -t'#' -k 2)
+#sorted_content=$(echo -e "$combined_content" | grep "vless://" | sort -t'#' -k 2)
+sorted_content=$(echo -e "$combined_content" \
+  | grep "vless://" \
+  | LC_COLLATE=C sort -t'#' -k2,2V)
 
 
 
