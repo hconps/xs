@@ -149,37 +149,54 @@ EOF
 
 cat > "$WORK_DIR/config.json" << EOF
 {
-  "log": { "loglevel": "warning" },
-  "inbounds": [{
-    "listen": "0.0.0.0",
-    "port": $PORT,
-    "protocol": "vless",
-    "settings": {
-      "clients": [{"id": "$UUID", "flow": "xtls-rprx-vision"}],
-      "decryption": "none"
+    "log": {
+        "loglevel": "none"
     },
-    "streamSettings": {
-      "network": "tcp",
-      "security": "reality",
-      "realitySettings": {
-        "show": false,
-        "dest": "$DOMAIN:443",
-        "xver": 0,
-        "serverNames": ["$DOMAIN"],
-        "privateKey": "$PRIVATE_KEY",
-        "shortIds": ["$SHORT_ID"]
-      }
-    },
-    "sniffing": {"enabled": true, "destOverride": ["http", "tls", "quic"]}
-  }],
-  "outbounds": [
-    {"protocol": "freedom", "tag": "direct"},
-    {"protocol": "freedom", "settings": {"domainStrategy": "UseIPv4"}, "tag": "force-ipv4"},
-    {"protocol": "freedom", "settings": {"domainStrategy": "UseIPv6"}, "tag": "force-ipv6"},
-    {"protocol": "blackhole", "tag": "block"}
-  ],
-  "dns": {"servers": ["8.8.8.8", "1.1.1.1", "localhost"]},
-  "routing": {"domainStrategy": "IPIfNonMatch", "rules": [{"type": "field", "ip": ["geoip:private"], "outboundTag": "block"}]}
+    "inbounds": [
+        {
+            "port": $PORT,
+            "protocol": "vless",
+            "settings": {
+                "clients": [
+                    {
+                        "id": "$UUID",
+                        "email": "$UUID",
+                        "flow": "xtls-rprx-vision"
+                    }
+                ],
+                "decryption": "none"
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "dest": "$DOMAIN:443",
+                    "serverNames": [
+                        "$DOMAIN"
+                    ],
+                    "privateKey": "$PRIVATE_KEY",
+                    "shortIds": [
+                        "$SHORT_ID"
+                    ]
+                }
+            },
+            "sniffing": {
+                "enabled": true,
+                "destOverride": [
+                    "http",
+                    "tls",
+                    "quic"
+                ],
+                "routeOnly": true
+            }
+        }
+    ],
+    "outbounds": [
+        {
+            "protocol": "freedom",
+            "tag": "direct"
+        }
+    ]
 }
 EOF
 
