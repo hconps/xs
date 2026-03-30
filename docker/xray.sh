@@ -100,7 +100,7 @@ if [ -n "$CUSTOM_PRIVATE_KEY" ]; then
     # 直接把私钥作为参数传入 x25519
     OUTPUT=$(docker run --rm "$IMAGE_NAME" x25519 -i "$PRIVATE_KEY" 2>&1)
 
-    PUBLIC_KEY=$(echo "$OUTPUT" | grep -oP '(?<=Public key: |Password: ).*')
+    PUBLIC_KEY=$(echo "$OUTPUT" | grep -oP '(Public key|Password.*|PublicKey): \K.*')
 
 else
     # === 场景 B: 自动生成 ===
