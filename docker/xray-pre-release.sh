@@ -177,7 +177,8 @@ cat > "$WORK_DIR/config.json" << EOF
                     "privateKey": "$PRIVATE_KEY",
                     "shortIds": [
                         "$SHORT_ID"
-                    ]
+                    ],
+                    "minClientVer": "26.3.27"
                 }
             },
             "sniffing": {
@@ -206,7 +207,7 @@ docker compose down >/dev/null 2>&1
 docker compose up -d
 
 # --- 9. 输出链接 ---
-# 链接中的指纹 fingerprint 建议用 chrome 或 random，这里用 chrome
+# 链接中的指纹 fingerprint
 FINGERPRINT="android"
 VLESS_URL="vless://$UUID@${IP}:${PORT}?encryption=none&security=reality&type=tcp&sni=$DOMAIN&fp=$FINGERPRINT&pbk=$PUBLIC_KEY&sid=$SHORT_ID&flow=xtls-rprx-vision#Xray_Reality_${IP}"
 
