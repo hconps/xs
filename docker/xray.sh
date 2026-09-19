@@ -207,7 +207,7 @@ docker compose up -d
 
 # --- 9. 输出链接 ---
 # 链接中的指纹 fingerprint 
-FINGERPRINT="andorid"
+FINGERPRINT="android"
 VLESS_URL="vless://$UUID@${IP}:${PORT}?encryption=none&security=reality&type=tcp&sni=$DOMAIN&fp=$FINGERPRINT&pbk=$PUBLIC_KEY&sid=$SHORT_ID&flow=xtls-rprx-vision#Xray_Reality_${IP}"
 
 echo "$VLESS_URL" > ~/xray/url
