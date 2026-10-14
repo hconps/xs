@@ -90,7 +90,7 @@ EOF
 # ===========================
 cat > "$WORK_DIR/config.json" << EOF
 {
-  "log": { "loglevel": "warning" },
+  "log": { "loglevel": "info" },
 
   "inbounds": [
     {
