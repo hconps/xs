@@ -29,7 +29,6 @@ use_udp = true
 [[endpoints]]
 listen = "0.0.0.0:16666"
 remote = "1.1.1.1:16666"
-
 EOF
 
 echo "==> [4/4] 正在配置并启动 Systemd 服务..."
@@ -37,13 +36,14 @@ cat << 'EOF' > /etc/systemd/system/realm.service
 [Unit]
 Description=Realm Forward Service
 After=network-online.target
-Wants=network-online.target systemd-networkd-wait-online.service
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
 Restart=on-failure
 RestartSec=5s
+LimitNOFILE=1048576
 ExecStart=/etc/realm/realm -c /etc/realm/config.toml
 
 [Install]
