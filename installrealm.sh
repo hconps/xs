@@ -13,7 +13,7 @@ DOWNLOAD_URL="https://github.com/zhboner/realm/releases/download/${REALM_VERSION
 
 echo "==> [1/4] 正在创建目录并下载 Realm ${REALM_VERSION}..."
 mkdir -p "${REALM_DIR}"
-wget -q --show-progress -O "${REALM_DIR}/realm.tar.gz" "${DOWNLOAD_URL}"
+curl -fL -# -o "${REALM_DIR}/realm.tar.gz" "${DOWNLOAD_URL}"
 
 echo "==> [2/4] 正在解压并赋予执行权限..."
 tar -zxvf "${REALM_DIR}/realm.tar.gz" -C "${REALM_DIR}"
