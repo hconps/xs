@@ -2,6 +2,7 @@
 
 # ==============================================================
 # 功能：Docker Mihomo (Clash.Meta) VLESS-Reality & SS-2022 自动部署脚本
+# 包含：Docker 自动检查与更新
 # ==============================================================
 
 # --- 1. 默认变量 ---
@@ -80,22 +81,40 @@ PORT_CHACHA=${PORT_CHACHA:-$DEFAULT_PORT_CHACHA}
 PORT_AES=${PORT_AES:-$DEFAULT_PORT_AES}
 DOMAIN=${SNI:-$DEFAULT_SNI}
 
-# --- 3. 环境准备 ---
-echo -e "\033[36m>>> 检查环境...\033[0m"
+# --- 3. 环境准备与 Docker 更新检查 ---
+echo -e "\033[36m>>> 检查环境与 Docker 版本...\033[0m"
 if ! echo "test" | grep -P "test" &>/dev/null; then
     echo "正在安装 grep..."
     if [ -f /etc/debian_version ]; then
-        apt-get update && apt-get install -y grep
+        apt-get update && apt-get install -y grep curl
     elif [ -f /etc/redhat-release ]; then
-        yum install -y grep
+        yum install -y grep curl
     fi
 fi
 
 if ! command -v docker &> /dev/null; then
-    echo "安装 Docker..."
+    echo "未检测到 Docker，正在安装全新 Docker..."
     curl -fsSL https://get.docker.com | bash
     systemctl enable docker
     systemctl start docker
+else
+    # 检查 Docker 更新
+    LOCAL_VERSION=$(docker -v | awk '{print $3}' | tr -d ',')
+    LATEST_VERSION=$(curl -sI https://github.com/docker/cli/releases/latest | grep -i "^location:" | awk -F'/v' '{print $2}' | tr -d '\r')
+
+    if [ -n "$LATEST_VERSION" ] && [ "$LOCAL_VERSION" != "$LATEST_VERSION" ]; then
+        # 比较版本号，判断本地是否低于最新版
+        if [ "$(printf '%s\n' "$LOCAL_VERSION" "$LATEST_VERSION" | sort -V | head -n1)" = "$LOCAL_VERSION" ]; then
+            echo -e "\033[33m发现 Docker 新版本: $LATEST_VERSION (当前版本: $LOCAL_VERSION)，正在自动更新...\033[0m"
+            curl -fsSL https://get.docker.com | bash
+            systemctl restart docker
+            echo -e "\033[32mDocker 已更新至 $LATEST_VERSION\033[0m"
+        else
+            echo "Docker 当前版本 ($LOCAL_VERSION) 已是最新或更高。"
+        fi
+    else
+        echo "Docker 已是最新版本 ($LOCAL_VERSION)。"
+    fi
 fi
 
 mkdir -p "$WORK_DIR"
@@ -206,7 +225,7 @@ fi
 if [ "$ENABLE_SS_CHACHA" -eq 1 ]; then
 cat >> "$WORK_DIR/config.yaml" << EOF
   - name: ss-chacha20-in
-    type: ss
+    type: shadowsocks
     port: $PORT_CHACHA
     listen: "::"
     cipher: 2022-blake3-chacha20-poly1305
@@ -218,7 +237,7 @@ fi
 if [ "$ENABLE_SS_AES" -eq 1 ]; then
 cat >> "$WORK_DIR/config.yaml" << EOF
   - name: ss-aes-128-in
-    type: ss
+    type: shadowsocks
     port: $PORT_AES
     listen: "::"
     cipher: 2022-blake3-aes-128-gcm
