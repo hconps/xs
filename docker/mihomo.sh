@@ -1,48 +1,85 @@
 #!/bin/bash
 
 # ==============================================================
-# 功能：Docker Mihomo (Clash.Meta) VLESS-Reality 自动部署脚本
-# 镜像：metacubex/mihomo:latest (官方镜像)
+# 功能：Docker Mihomo (Clash.Meta) VLESS-Reality & SS-2022 自动部署脚本
 # ==============================================================
 
 # --- 1. 默认变量 ---
-DEFAULT_PORT=443
+DEFAULT_PORT_VLESS=443
+DEFAULT_PORT_CHACHA=444
+DEFAULT_PORT_AES=445
 DEFAULT_SNI="learn.microsoft.com"
-CUSTOM_UUID=""
-CUSTOM_PRIVATE_KEY=""
-CUSTOM_PUBLIC_KEY=""
-CUSTOM_SHORT_ID=""
 WORK_DIR="/root/mihomo"
 IMAGE_NAME="metacubex/mihomo:latest"
 
-# --- 2. 解析参数 ---
+MODE_SPECIFIED=0
+ENABLE_VLESS=0
+ENABLE_SS_CHACHA=0
+ENABLE_SS_AES=0
+
+# --- 2. 解析长参数 ---
 usage() {
     echo "用法: $0 [选项]"
-    echo "选项:"
-    echo "  -p <port>      监听端口 (默认: 443)"
-    echo "  -s <domain>    伪装域名 (默认: learn.microsoft.com)"
-    echo "  -u <uuid>      自定义 UUID"
-    echo "  -k <privkey>   自定义私钥 (需配合 -P 使用)"
-    echo "  -P <pubkey>    自定义公钥 (配合 -k 使用)"
-    echo "  -i <shortid>   自定义 ShortID"
-    echo "  -h             显示帮助"
+    echo ""
+    echo "VLESS Reality 选项:"
+    echo "  --vless               启用 VLESS-Reality"
+    echo "  --port-vless <port>   指定 VLESS 监听端口 (默认: 443)"
+    echo "  --domain <domain>     指定伪装域名 (默认: learn.microsoft.com)"
+    echo "  --uuid <uuid>         自定义 UUID"
+    echo "  --private-key <key>   自定义私钥 (需配合公钥使用)"
+    echo "  --public-key <key>    自定义公钥 (需配合私钥使用)"
+    echo "  --short-id <id>       自定义 ShortID"
+    echo ""
+    echo "Shadowsocks (Chacha20) 选项:"
+    echo "  --ss-chacha           启用 2022-blake3-chacha20-poly1305"
+    echo "  --port-chacha <port>  指定 SS-Chacha20 监听端口 (默认: 444)"
+    echo "  --pwd-chacha <pwd>    指定 SS-Chacha 密码 (需 32-byte Base64，设定则自动启用该协议)"
+    echo ""
+    echo "Shadowsocks (AES-128) 选项:"
+    echo "  --ss-aes              启用 2022-blake3-aes-128-gcm"
+    echo "  --port-aes <port>     指定 SS-AES 监听端口 (默认: 445)"
+    echo "  --pwd-aes <pwd>       指定 SS-AES 密码 (需 16-byte Base64，设定则自动启用该协议)"
+    echo ""
+    echo "  --help                显示帮助"
+    echo ""
+    echo "注意: 如果不带任何 --vless, --ss-chacha, --ss-aes, --pwd-* 参数，则默认部署全部三种协议。"
     exit 1
 }
 
-while getopts "p:s:u:k:P:i:h" opt; do
-    case "$opt" in
-        p) PORT=$OPTARG ;;
-        s) SNI=$OPTARG ;;
-        u) CUSTOM_UUID=$OPTARG ;;
-        k) CUSTOM_PRIVATE_KEY=$OPTARG ;;
-        P) CUSTOM_PUBLIC_KEY=$OPTARG ;;
-        i) CUSTOM_SHORT_ID=$OPTARG ;;
-        h) usage ;;
-        *) usage ;;
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --vless) ENABLE_VLESS=1; MODE_SPECIFIED=1; shift ;;
+        --port-vless) PORT_VLESS="$2"; shift 2 ;;
+        --domain) SNI="$2"; shift 2 ;;
+        --uuid) CUSTOM_UUID="$2"; shift 2 ;;
+        --private-key) CUSTOM_PRIVATE_KEY="$2"; shift 2 ;;
+        --public-key) CUSTOM_PUBLIC_KEY="$2"; shift 2 ;;
+        --short-id) CUSTOM_SHORT_ID="$2"; shift 2 ;;
+        
+        --ss-chacha) ENABLE_SS_CHACHA=1; MODE_SPECIFIED=1; shift ;;
+        --port-chacha) PORT_CHACHA="$2"; shift 2 ;;
+        --pwd-chacha) SS_CHACHA_PWD="$2"; ENABLE_SS_CHACHA=1; MODE_SPECIFIED=1; shift 2 ;;
+        
+        --ss-aes) ENABLE_SS_AES=1; MODE_SPECIFIED=1; shift ;;
+        --port-aes) PORT_AES="$2"; shift 2 ;;
+        --pwd-aes) SS_AES_PWD="$2"; ENABLE_SS_AES=1; MODE_SPECIFIED=1; shift 2 ;;
+
+        --help) usage ;;
+        *) echo -e "\033[31m未知参数: $1\033[0m"; usage ;;
     esac
 done
 
-PORT=${PORT:-$DEFAULT_PORT}
+# 如果未指定任何协议开启参数，默认全开
+if [ "$MODE_SPECIFIED" -eq 0 ]; then
+    ENABLE_VLESS=1
+    ENABLE_SS_CHACHA=1
+    ENABLE_SS_AES=1
+fi
+
+# 赋默认值
+PORT_VLESS=${PORT_VLESS:-$DEFAULT_PORT_VLESS}
+PORT_CHACHA=${PORT_CHACHA:-$DEFAULT_PORT_CHACHA}
+PORT_AES=${PORT_AES:-$DEFAULT_PORT_AES}
 DOMAIN=${SNI:-$DEFAULT_SNI}
 
 # --- 3. 环境准备 ---
@@ -67,64 +104,65 @@ mkdir -p "$WORK_DIR"
 echo -e "\033[36m>>> 拉取镜像 ($IMAGE_NAME)...\033[0m"
 docker pull "$IMAGE_NAME"
 
-# --- 4. 核心逻辑：UUID 和 ShortID ---
 clean() { echo "$1" | tr -d ' \r\n\t'; }
 
-if [ -z "$CUSTOM_UUID" ]; then
-    # 直接使用 Linux 内核自带接口生成标准 UUID
-    UUID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || openssl rand -hex 16)
-    UUID=$(clean "$UUID")
-    echo "已生成 UUID: $UUID"
-else
-    UUID=$(clean "$CUSTOM_UUID")
-    echo "使用 UUID: $UUID"
-fi
+# --- 4. 生成对应协议的参数 ---
+echo -e "\033[36m>>> 处理凭证和密钥...\033[0m"
 
-if [ -z "$CUSTOM_SHORT_ID" ]; then
-    SHORT_ID=$(openssl rand -hex 4)
-    SHORT_ID=$(clean "$SHORT_ID")
-else
-    SHORT_ID=$(clean "$CUSTOM_SHORT_ID")
-fi
-
-# --- 5. 核心逻辑：密钥生成 ---
-echo -e "\033[36m>>> 处理密钥对...\033[0m"
-
-if [ -n "$CUSTOM_PRIVATE_KEY" ]; then
-    if [ -z "$CUSTOM_PUBLIC_KEY" ]; then
-        echo -e "\033[31m错误：mihomo 不支持从私钥推导公钥，使用 -k 时必须同时通过 -P 提供公钥！\033[0m"
-        exit 1
+# VLESS 配置
+if [ "$ENABLE_VLESS" -eq 1 ]; then
+    if [ -z "$CUSTOM_UUID" ]; then
+        UUID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || openssl rand -hex 16)
+        UUID=$(clean "$UUID")
+    else
+        UUID=$(clean "$CUSTOM_UUID")
     fi
-    PRIVATE_KEY=$(clean "$CUSTOM_PRIVATE_KEY")
-    PUBLIC_KEY=$(clean "$CUSTOM_PUBLIC_KEY")
-else
-    echo "正在生成新密钥对..."
-    OUTPUT=$(docker run --rm "$IMAGE_NAME" generate reality-keypair 2>&1)
-    PRIVATE_KEY=$(echo "$OUTPUT" | grep -oP 'PrivateKey: \K.*')
-    PUBLIC_KEY=$(echo "$OUTPUT" | grep -oP 'PublicKey: \K.*')
+
+    if [ -z "$CUSTOM_SHORT_ID" ]; then
+        SHORT_ID=$(openssl rand -hex 4)
+        SHORT_ID=$(clean "$SHORT_ID")
+    else
+        SHORT_ID=$(clean "$CUSTOM_SHORT_ID")
+    fi
+
+    if [ -n "$CUSTOM_PRIVATE_KEY" ]; then
+        if [ -z "$CUSTOM_PUBLIC_KEY" ]; then
+            echo -e "\033[31m错误：mihomo 不支持从私钥推导公钥，使用自定义私钥时必须同时提供公钥！\033[0m"
+            exit 1
+        fi
+        PRIVATE_KEY=$(clean "$CUSTOM_PRIVATE_KEY")
+        PUBLIC_KEY=$(clean "$CUSTOM_PUBLIC_KEY")
+    else
+        OUTPUT=$(docker run --rm "$IMAGE_NAME" generate reality-keypair 2>&1)
+        PRIVATE_KEY=$(echo "$OUTPUT" | grep -oP 'PrivateKey: \K.*')
+        PUBLIC_KEY=$(echo "$OUTPUT" | grep -oP 'PublicKey: \K.*')
+    fi
+    PRIVATE_KEY=$(clean "$PRIVATE_KEY")
+    PUBLIC_KEY=$(clean "$PUBLIC_KEY")
 fi
 
-PRIVATE_KEY=$(clean "$PRIVATE_KEY")
-PUBLIC_KEY=$(clean "$PUBLIC_KEY")
-
-if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
-    echo -e "\033[31m错误：密钥提取失败！\033[0m"
-    echo "原始输出如下，请检查："
-    echo "$OUTPUT"
-    exit 1
+# SS Chacha20 配置
+if [ "$ENABLE_SS_CHACHA" -eq 1 ]; then
+    if [ -z "$SS_CHACHA_PWD" ]; then
+        SS_CHACHA_PWD=$(openssl rand -base64 32)
+    fi
+    SS_CHACHA_PWD=$(clean "$SS_CHACHA_PWD")
 fi
 
-echo "------------------------------------------------"
-echo "UUID:        $UUID"
-echo "Short ID:    $SHORT_ID"
-echo "Private Key: $PRIVATE_KEY"
-echo "Public Key:  $PUBLIC_KEY"
-echo "------------------------------------------------"
+# SS AES-128 配置
+if [ "$ENABLE_SS_AES" -eq 1 ]; then
+    if [ -z "$SS_AES_PWD" ]; then
+        SS_AES_PWD=$(openssl rand -base64 16)
+    fi
+    SS_AES_PWD=$(clean "$SS_AES_PWD")
+fi
 
-# --- 6. 获取 IP ---
+# --- 5. 获取 IP ---
 IP=$(curl -s ipv4.ip.sb || curl -s ifconfig.me)
 
-# --- 7. 生成配置文件 ---
+# --- 6. 生成配置文件 ---
+echo -e "\033[36m>>> 生成配置文件...\033[0m"
+
 cat > "$WORK_DIR/compose.yaml" << EOF
 services:
   mihomo:
@@ -136,15 +174,21 @@ services:
       - ./config.yaml:/root/.config/mihomo/config.yaml:ro
 EOF
 
+# 初始化 config.yaml
 cat > "$WORK_DIR/config.yaml" << EOF
 log-level: info
 mode: direct
 ipv6: true
 
 listeners:
+EOF
+
+# 追加 VLESS
+if [ "$ENABLE_VLESS" -eq 1 ]; then
+cat >> "$WORK_DIR/config.yaml" << EOF
   - name: vless-reality-in
     type: vless
-    port: $PORT
+    port: $PORT_VLESS
     listen: "::"
     users:
       - username: user1
@@ -158,16 +202,69 @@ listeners:
       server-names:
         - "$DOMAIN"
 EOF
+fi
 
-# --- 8. 启动 ---
+# 追加 SS-Chacha20
+if [ "$ENABLE_SS_CHACHA" -eq 1 ]; then
+cat >> "$WORK_DIR/config.yaml" << EOF
+  - name: ss-chacha20-in
+    type: ss
+    port: $PORT_CHACHA
+    listen: "::"
+    cipher: 2022-blake3-chacha20-poly1305
+    password: "$SS_CHACHA_PWD"
+EOF
+fi
+
+# 追加 SS-AES
+if [ "$ENABLE_SS_AES" -eq 1 ]; then
+cat >> "$WORK_DIR/config.yaml" << EOF
+  - name: ss-aes-128-in
+    type: ss
+    port: $PORT_AES
+    listen: "::"
+    cipher: 2022-blake3-aes-128-gcm
+    password: "$SS_AES_PWD"
+EOF
+fi
+
+# --- 7. 启动 ---
 cd "$WORK_DIR"
 docker compose down >/dev/null 2>&1
 docker compose up -d
 
-# --- 9. 输出链接 ---
-FINGERPRINT="ios"
-VLESS_URL="vless://$UUID@${IP}:${PORT}?encryption=none&security=reality&type=tcp&sni=$DOMAIN&fp=$FINGERPRINT&pbk=$PUBLIC_KEY&sid=$SHORT_ID&flow=xtls-rprx-vision#Mihomo_Reality_${IP}"
-
-echo "$VLESS_URL" > "$WORK_DIR/url"
+# --- 8. 输出链接 ---
 echo -e "\n\033[32m✅ Mihomo 部署完成！\033[0m"
-echo -e "分享链接:\n\033[33m$VLESS_URL\033[0m\n"
+echo "------------------------------------------------"
+> "$WORK_DIR/url"
+
+if [ "$ENABLE_VLESS" -eq 1 ]; then
+    FINGERPRINT="ios"
+    VLESS_URL="vless://$UUID@${IP}:${PORT_VLESS}?encryption=none&security=reality&type=tcp&sni=$DOMAIN&fp=$FINGERPRINT&pbk=$PUBLIC_KEY&sid=$SHORT_ID&flow=xtls-rprx-vision#Mihomo_Reality"
+    echo "$VLESS_URL" >> "$WORK_DIR/url"
+    echo -e "VLESS-Reality 端口: $PORT_VLESS"
+    echo -e "VLESS 链接:\n\033[33m$VLESS_URL\033[0m\n"
+fi
+
+if [ "$ENABLE_SS_CHACHA" -eq 1 ]; then
+    SS_METHOD="2022-blake3-chacha20-poly1305"
+    SS_USERINFO=$(echo -n "${SS_METHOD}:${SS_CHACHA_PWD}" | base64 | tr -d '\n')
+    SS_CHACHA_URL="ss://${SS_USERINFO}@${IP}:${PORT_CHACHA}#Mihomo_SS_Chacha20"
+    echo "$SS_CHACHA_URL" >> "$WORK_DIR/url"
+    echo -e "SS-Chacha20 端口: $PORT_CHACHA"
+    echo -e "SS-Chacha20 密码: $SS_CHACHA_PWD"
+    echo -e "SS-Chacha20 链接:\n\033[33m$SS_CHACHA_URL\033[0m\n"
+fi
+
+if [ "$ENABLE_SS_AES" -eq 1 ]; then
+    SS_METHOD="2022-blake3-aes-128-gcm"
+    SS_USERINFO=$(echo -n "${SS_METHOD}:${SS_AES_PWD}" | base64 | tr -d '\n')
+    SS_AES_URL="ss://${SS_USERINFO}@${IP}:${PORT_AES}#Mihomo_SS_AES128"
+    echo "$SS_AES_URL" >> "$WORK_DIR/url"
+    echo -e "SS-AES128 端口: $PORT_AES"
+    echo -e "SS-AES128 密码: $SS_AES_PWD"
+    echo -e "SS-AES128 链接:\n\033[33m$SS_AES_URL\033[0m\n"
+fi
+
+echo "所有节点链接已保存至: $WORK_DIR/url"
+echo "------------------------------------------------"
