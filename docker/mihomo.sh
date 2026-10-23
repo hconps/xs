@@ -230,6 +230,7 @@ cat >> "$WORK_DIR/config.yaml" << EOF
     listen: "::"
     cipher: 2022-blake3-chacha20-poly1305
     password: "$SS_CHACHA_PWD"
+    udp: true
 EOF
 fi
 
@@ -242,6 +243,7 @@ cat >> "$WORK_DIR/config.yaml" << EOF
     listen: "::"
     cipher: 2022-blake3-aes-128-gcm
     password: "$SS_AES_PWD"
+    udp: true
 EOF
 fi
 
