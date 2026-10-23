@@ -33,35 +33,33 @@ usage() {
     echo "Shadowsocks (Chacha20) 选项:"
     echo "  --ss-chacha           启用 2022-blake3-chacha20-poly1305"
     echo "  --port-chacha <port>  指定 SS-Chacha20 监听端口 (默认: 444)"
-    echo "  --pwd-chacha <pwd>    指定 SS-Chacha 密码 (需 32-byte Base64，设定则自动启用该协议)"
+    echo "  --pwd-chacha <pwd>    指定 SS-Chacha 密码 (需 32-byte Base64)"
     echo ""
     echo "Shadowsocks (AES-128) 选项:"
     echo "  --ss-aes              启用 2022-blake3-aes-128-gcm"
     echo "  --port-aes <port>     指定 SS-AES 监听端口 (默认: 445)"
-    echo "  --pwd-aes <pwd>       指定 SS-AES 密码 (需 16-byte Base64，设定则自动启用该协议)"
+    echo "  --pwd-aes <pwd>       指定 SS-AES 密码 (需 16-byte Base64)"
     echo ""
     echo "  --help                显示帮助"
-    echo ""
-    echo "注意: 如果不带任何 --vless, --ss-chacha, --ss-aes, --pwd-* 参数，则默认部署全部三种协议。"
     exit 1
 }
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --vless) ENABLE_VLESS=1; MODE_SPECIFIED=1; shift ;;
-        --port-vless) PORT_VLESS="$2"; shift 2 ;;
-        --domain) SNI="$2"; shift 2 ;;
-        --uuid) CUSTOM_UUID="$2"; shift 2 ;;
-        --private-key) CUSTOM_PRIVATE_KEY="$2"; shift 2 ;;
-        --public-key) CUSTOM_PUBLIC_KEY="$2"; shift 2 ;;
-        --short-id) CUSTOM_SHORT_ID="$2"; shift 2 ;;
+        --port-vless) PORT_VLESS="$2"; ENABLE_VLESS=1; MODE_SPECIFIED=1; shift 2 ;;
+        --domain) SNI="$2"; ENABLE_VLESS=1; MODE_SPECIFIED=1; shift 2 ;;
+        --uuid) CUSTOM_UUID="$2"; ENABLE_VLESS=1; MODE_SPECIFIED=1; shift 2 ;;
+        --private-key) CUSTOM_PRIVATE_KEY="$2"; ENABLE_VLESS=1; MODE_SPECIFIED=1; shift 2 ;;
+        --public-key) CUSTOM_PUBLIC_KEY="$2"; ENABLE_VLESS=1; MODE_SPECIFIED=1; shift 2 ;;
+        --short-id) CUSTOM_SHORT_ID="$2"; ENABLE_VLESS=1; MODE_SPECIFIED=1; shift 2 ;;
         
         --ss-chacha) ENABLE_SS_CHACHA=1; MODE_SPECIFIED=1; shift ;;
-        --port-chacha) PORT_CHACHA="$2"; shift 2 ;;
+        --port-chacha) PORT_CHACHA="$2"; ENABLE_SS_CHACHA=1; MODE_SPECIFIED=1; shift 2 ;;
         --pwd-chacha) SS_CHACHA_PWD="$2"; ENABLE_SS_CHACHA=1; MODE_SPECIFIED=1; shift 2 ;;
         
         --ss-aes) ENABLE_SS_AES=1; MODE_SPECIFIED=1; shift ;;
-        --port-aes) PORT_AES="$2"; shift 2 ;;
+        --port-aes) PORT_AES="$2"; ENABLE_SS_AES=1; MODE_SPECIFIED=1; shift 2 ;;
         --pwd-aes) SS_AES_PWD="$2"; ENABLE_SS_AES=1; MODE_SPECIFIED=1; shift 2 ;;
 
         --help) usage ;;
@@ -127,7 +125,7 @@ if [ "$ENABLE_VLESS" -eq 1 ]; then
 
     if [ -n "$CUSTOM_PRIVATE_KEY" ]; then
         if [ -z "$CUSTOM_PUBLIC_KEY" ]; then
-            echo -e "\033[31m错误：mihomo 不支持从私钥推导公钥，使用自定义私钥时必须同时提供公钥！\033[0m"
+            echo -e "\033[31m错误：mihomo 不支持从私钥推导公钥，使用自定义私钥时必须同时提供公钥 (--public-key)！\033[0m"
             exit 1
         fi
         PRIVATE_KEY=$(clean "$CUSTOM_PRIVATE_KEY")
@@ -252,7 +250,6 @@ if [ "$ENABLE_SS_CHACHA" -eq 1 ]; then
     SS_CHACHA_URL="ss://${SS_USERINFO}@${IP}:${PORT_CHACHA}#Mihomo_SS_Chacha20"
     echo "$SS_CHACHA_URL" >> "$WORK_DIR/url"
     echo -e "SS-Chacha20 端口: $PORT_CHACHA"
-    echo -e "SS-Chacha20 密码: $SS_CHACHA_PWD"
     echo -e "SS-Chacha20 链接:\n\033[33m$SS_CHACHA_URL\033[0m\n"
 fi
 
@@ -262,7 +259,6 @@ if [ "$ENABLE_SS_AES" -eq 1 ]; then
     SS_AES_URL="ss://${SS_USERINFO}@${IP}:${PORT_AES}#Mihomo_SS_AES128"
     echo "$SS_AES_URL" >> "$WORK_DIR/url"
     echo -e "SS-AES128 端口: $PORT_AES"
-    echo -e "SS-AES128 密码: $SS_AES_PWD"
     echo -e "SS-AES128 链接:\n\033[33m$SS_AES_URL\033[0m\n"
 fi
 
